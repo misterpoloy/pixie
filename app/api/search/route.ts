@@ -33,8 +33,7 @@ export async function GET(req: NextRequest) {
     const tom = addDays(new Date(), 1);
     conditions.push(gte(tasks.dueDate, startOfDay(tom)), lte(tasks.dueDate, endOfDay(tom)));
   } else if (view === "upcoming") {
-    const now = new Date();
-    conditions.push(gte(tasks.dueDate, startOfDay(addDays(now, 1))));
+    conditions.push(eq(tasks.isUpcoming, true));
   } else if (view === "someday") {
     conditions.push(eq(tasks.isSomeday, true));
   }

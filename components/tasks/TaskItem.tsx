@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatDate, isToday, isTomorrow } from "@/lib/date-helpers";
+import { formatDate, formatElapsedDays, isToday, isTomorrow } from "@/lib/date-helpers";
 
 interface Label {
   id: string;
@@ -16,6 +16,9 @@ interface Task {
   priority: "none" | "low" | "medium" | "high";
   dueDate?: string | null;
   isSomeday?: boolean;
+  isUpcoming?: boolean;
+  hideOverdue?: boolean;
+  createdAt?: string;
   subtasks?: Task[];
   labels?: { labelId: string; label?: Label }[];
   notes?: string | null;
@@ -24,25 +27,37 @@ interface Task {
 interface Props {
   task: Task;
   depth?: number;
+  metaMode?: "default" | "upcoming";
   onToggle?: (id: string, done: boolean) => void;
   onOpen?: (task: Task) => void;
   onRefresh?: () => void;
 }
 
-function dueDateLabel(date: string | null | undefined): { text: string; color: string } | null {
+function dueDateLabel(
+  date: string | null | undefined,
+  hideOverdue?: boolean,
+): { text: string; color: string } | null {
   if (!date) return null;
   if (isToday(date)) return { text: "Today", color: "var(--accent)" };
   if (isTomorrow(date)) return { text: "Tomorrow", color: "var(--warning)" };
   const d = new Date(date);
   const now = new Date();
-  if (d < now) return { text: formatDate(date), color: "var(--danger)" };
+  if (d < now) {
+    if (hideOverdue) return null;
+    const days = Math.round((now.getTime() - d.getTime()) / 86_400_000);
+    return { text: `+${days}d`, color: "var(--info)" };
+  }
   return { text: formatDate(date), color: "var(--text-muted)" };
 }
 
-export default function TaskItem({ task, depth = 0, onToggle, onOpen, onRefresh }: Props) {
+export default function TaskItem({ task, depth = 0, metaMode = "default", onToggle, onOpen, onRefresh }: Props) {
   const [expanded, setExpanded] = useState(true);
   const isDone = task.status === "done";
-  const dateInfo = dueDateLabel(task.dueDate);
+  const dateInfo = dueDateLabel(task.dueDate, task.hideOverdue);
+  const metaText =
+    metaMode === "upcoming" && task.isUpcoming && task.createdAt
+      ? { text: formatElapsedDays(task.createdAt), color: "var(--text-muted)" }
+      : dateInfo;
   const hasSubtasks = task.subtasks && task.subtasks.length > 0;
 
   async function toggle() {
@@ -95,17 +110,17 @@ export default function TaskItem({ task, depth = 0, onToggle, onOpen, onRefresh 
           >
             {task.title}
           </div>
-          {(dateInfo || task.priority !== "none") && (
+          {(metaText || task.priority !== "none" || task.isSomeday) && (
             <div className="task-meta">
               {task.priority !== "none" && (
                 <span className={`priority-dot ${task.priority}`} title={task.priority} />
               )}
-              {dateInfo && (
-                <span style={{ fontSize: "0.75rem", color: dateInfo.color }}>
-                  {dateInfo.text}
+              {metaText && (
+                <span style={{ fontSize: "0.75rem", color: metaText.color }}>
+                  {metaText.text}
                 </span>
               )}
-              {task.isSomeday && !dateInfo && (
+              {task.isSomeday && !metaText && (
                 <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Someday</span>
               )}
             </div>
@@ -131,6 +146,7 @@ export default function TaskItem({ task, depth = 0, onToggle, onOpen, onRefresh 
               key={sub.id}
               task={sub}
               depth={depth + 1}
+              metaMode={metaMode}
               onToggle={onToggle}
               onOpen={onOpen}
               onRefresh={onRefresh}

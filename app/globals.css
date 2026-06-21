@@ -42,7 +42,8 @@
   --radius-xl: 28px;
   --radius-full: 9999px;
 
-  --sidebar-width: 260px;
+  --sidebar-width: 220px;
+  --right-bar-width: 280px;
 
   --transition-fast: 120ms ease;
   --transition-base: 200ms ease;
@@ -110,7 +111,7 @@ body::before {
   width: var(--sidebar-width);
   flex-shrink: 0;
   position: fixed;
-  top: 0; left: 0; bottom: 0;
+  top: 44px; left: 0; bottom: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
@@ -118,7 +119,7 @@ body::before {
   -webkit-backdrop-filter: var(--glass-blur);
   border-right: 1px solid var(--glass-border);
   z-index: 100;
-  padding: 20px 12px;
+  padding: 12px 12px 20px;
   gap: 2px;
   overflow-y: auto;
 }
@@ -311,6 +312,23 @@ body::before {
 .cal-day.selected { background: var(--accent-dim); }
 .cal-day.has-tasks::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); margin-top: 4px; }
 
+.cal-day-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 214, 10, 0.18);
+  border: 1px solid rgba(255, 214, 10, 0.3);
+  color: var(--warning);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 3px;
+}
+
 /* ── Utilities ──────────────────────────────────────────────────────────── */
 .divider { height: 1px; background: var(--glass-border); margin: 12px 0; }
 .text-accent { color: var(--accent); }
@@ -327,6 +345,288 @@ body::before {
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(14px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Task cards (card view) ─────────────────────────────────────────────── */
+.task-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 250px);
+  gap: 16px;
+  align-items: start;
+}
+
+.task-card {
+  width: 250px;
+  min-height: 185px;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+  outline: none;
+}
+.task-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  border-color: var(--glass-border-strong);
+}
+.task-card:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.task-card.done {
+  opacity: 0.45;
+}
+
+.task-card-cover {
+  position: relative;
+  height: 108px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+
+.task-card-body {
+  flex: 1;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.task-card-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.task-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* ── Comment bubble ─────────────────────────────────────────────────────────── */
+.comment-bubble {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color var(--transition-fast);
+}
+.comment-bubble:hover {
+  border-color: var(--glass-border-strong);
+}
+
+/* ── Task card badges ────────────────────────────────────────────────────── */
+.task-card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid;
+}
+.task-card-badge--someday {
+  background: rgba(124, 110, 247, 0.18);
+  border-color: rgba(124, 110, 247, 0.35);
+  color: var(--accent-hover);
+}
+.task-card-badge--upcoming {
+  background: rgba(10, 132, 255, 0.18);
+  border-color: rgba(10, 132, 255, 0.35);
+  color: var(--info);
+}
+
+/* ── Subtask strip ──────────────────────────────────────────────────────────── */
+.task-card-subtasks {
+  border-top: 1px solid var(--glass-border);
+  padding: 8px 12px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.task-card-subtasks-bar {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.task-card-subtasks-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  border-radius: 99px;
+  transition: width var(--transition-base);
+}
+
+.task-card-subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.task-card-subtask-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 1px 2px;
+  transition: background var(--transition-fast);
+}
+.task-card-subtask-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.task-card-subtask-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+.task-card-subtask-check.done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.task-card-subtask-title {
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.task-card-subtask-overflow {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  padding-left: 21px;
+  font-weight: 500;
+}
+
+/* ── Right bar ──────────────────────────────────────────────────────────── */
+/* Scoped: only active when body carries the data-layout attribute */
+body[data-layout~="right-bar"] .main-content {
+  max-width: calc(100vw - var(--sidebar-width) - var(--right-bar-width) - 32px);
+}
+
+.right-bar {
+  position: fixed;
+  top: 44px;
+  right: 0;
+  bottom: 0;
+  width: var(--right-bar-width);
+  background: var(--bg-surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-left: 1px solid var(--glass-border);
+  padding: 20px 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  z-index: 90;
+  scrollbar-width: none;
+}
+.right-bar::-webkit-scrollbar { display: none; }
+
+/* ── Widgets ─────────────────────────────────────────────────────────────── */
+.widget {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.widget-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* ── Mini calendar (widget) ─────────────────────────────────────────────── */
+.mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+.mini-cal-day {
+  aspect-ratio: 1;
+  border-radius: 5px;
+  font-size: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background var(--transition-fast);
+}
+.mini-cal-day:hover { background: var(--bg-hover); color: var(--text-primary); }
+.mini-cal-day.today {
+  background: var(--accent-dim);
+  color: var(--accent-hover);
+  font-weight: 700;
+}
+.mini-cal-day.other-month { color: var(--text-muted); opacity: 0.4; }
+
+/* ── World clock (widget) ───────────────────────────────────────────────── */
+.clock-reference {
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.clock-city-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+.clock-city-row:last-child { border-bottom: none; }
+.clock-offset-badge {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* ── Auth pages ─────────────────────────────────────────────────────────── */

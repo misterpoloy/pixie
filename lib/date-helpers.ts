@@ -39,3 +39,18 @@ export function isTomorrow(date: Date | string | null | undefined): boolean {
   if (!date) return false;
   return isSameDay(new Date(date), addDays(new Date(), 1));
 }
+
+export function formatElapsedDays(date: Date | string | null | undefined): string {
+  if (!date) return "";
+
+  const created = startOfDay(new Date(date));
+  const today = startOfDay(new Date());
+  const elapsed = Math.max(
+    0,
+    Math.floor((today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+  );
+
+  if (elapsed === 0) return "Added today";
+  if (elapsed === 1) return "Added 1 day ago";
+  return `Added ${elapsed} days ago`;
+}

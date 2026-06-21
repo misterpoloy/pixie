@@ -1,23 +1,22 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, Suspense } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function LoginPage() {
-  const router = useRouter();
+function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/today";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    setStatus("loading");
     setError("");
 
     const res = await signIn("credentials", {
@@ -26,18 +25,24 @@ export default function LoginPage() {
       redirect: false,
     });
 
-    if (res?.error) {
-      setError("Invalid email or password");
-      setLoading(false);
-    } else {
-      router.push(callbackUrl);
+    if (!res || res.error) {
+      setError(
+        res?.error === "CredentialsSignin"
+          ? "Invalid email or password"
+          : "Something went wrong — try again"
+      );
+      setStatus("idle");
+      return;
     }
+
+    // Hard navigation so the session cookie is picked up by middleware
+    setStatus("success");
+    window.location.href = callbackUrl;
   }
 
   return (
     <div className="auth-shell">
       <div className="auth-card slide-up">
-        {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{
             width: 52, height: 52, borderRadius: 14,
@@ -66,6 +71,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoFocus
+              disabled={status !== "idle"}
             />
           </div>
           <div>
@@ -77,20 +83,45 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={status !== "idle"}
             />
           </div>
 
           {error && (
-            <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>{error}</p>
+            <div style={{
+              background: "rgba(255,69,58,0.1)",
+              border: "1px solid rgba(255,69,58,0.3)",
+              borderRadius: "var(--radius-sm)",
+              padding: "10px 14px",
+              color: "var(--danger)",
+              fontSize: "0.85rem",
+            }}>
+              {error}
+            </div>
+          )}
+
+          {status === "success" && (
+            <div style={{
+              background: "rgba(48,209,88,0.1)",
+              border: "1px solid rgba(48,209,88,0.3)",
+              borderRadius: "var(--radius-sm)",
+              padding: "10px 14px",
+              color: "var(--success)",
+              fontSize: "0.85rem",
+            }}>
+              ✓ Signed in — redirecting…
+            </div>
           )}
 
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={loading}
+            disabled={status !== "idle"}
             style={{ marginTop: 4, width: "100%", justifyContent: "center" }}
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {status === "loading" && "Signing in…"}
+            {status === "success" && "Redirecting…"}
+            {status === "idle" && "Sign in"}
           </button>
         </form>
 
@@ -104,5 +135,14 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+// useSearchParams requires Suspense in Next.js App Router
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

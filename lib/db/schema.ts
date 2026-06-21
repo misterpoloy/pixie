@@ -152,9 +152,13 @@ export const tasks = pgTable("tasks", {
   dueTime: varchar("due_time", { length: 5 }),  // HH:MM
   completedAt: timestamp("completed_at"),
   isSomeday: boolean("is_someday").notNull().default(false),
+  isUpcoming: boolean("is_upcoming").notNull().default(false),
   isInbox: boolean("is_inbox").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   recurrence: text("recurrence"),  // iCal RRULE string for recurring tasks
+  coverImage: text("cover_image"),
+  hideOverdue: boolean("hide_overdue").notNull().default(false),
+  updatedBy: varchar("updated_by", { length: 255 }),  // human name or agent identifier
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [
@@ -162,6 +166,7 @@ export const tasks = pgTable("tasks", {
   index("tasks_list_idx").on(t.listId),
   index("tasks_parent_idx").on(t.parentId),
   index("tasks_due_date_idx").on(t.dueDate),
+  index("tasks_upcoming_idx").on(t.isUpcoming),
   index("tasks_status_idx").on(t.status),
 ]);
 
@@ -188,6 +193,37 @@ export const notes = pgTable("notes", {
   index("notes_user_idx").on(t.userId),
   index("notes_task_idx").on(t.taskId),
 ]);
+
+// ─── Task Day Entries (daily carry-forward snapshots) ────────────────────────
+// One row per (task, date) — never duplicates task data.
+// Index on (user_id, date) → O(1) count for any calendar day.
+
+export const taskDayEntries = pgTable("task_day_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  taskId: uuid("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date: varchar("date", { length: 10 }).notNull(),  // YYYY-MM-DD local date
+  status: taskStatusEnum("status").notNull(),
+}, (t) => [
+  unique("tde_task_date_unique").on(t.taskId, t.date),
+  index("tde_user_date_idx").on(t.userId, t.date),
+]);
+
+// ─── Task Comments ────────────────────────────────────────────────────────────
+
+export const taskComments = pgTable("task_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  taskId: uuid("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  authorName: varchar("author_name", { length: 255 }).notNull(),  // human or agent name
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("comments_task_idx").on(t.taskId),
+]);
+
+export type TaskComment = typeof taskComments.$inferSelect;
+export type NewTaskComment = typeof taskComments.$inferInsert;
 
 // ─── Relations ────────────────────────────────────────────────────────────────
 
@@ -253,3 +289,5 @@ export type NewLabel = typeof labels.$inferInsert;
 export type Note = typeof notes.$inferSelect;
 export type NewNote = typeof notes.$inferInsert;
 export type ApiKey = typeof apiKeys.$inferSelect;
+export type TaskDayEntry = typeof taskDayEntries.$inferSelect;
+export type NewTaskDayEntry = typeof taskDayEntries.$inferInsert;

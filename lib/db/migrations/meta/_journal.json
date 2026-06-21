@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1781536185227,
+      "tag": "0000_colossal_master_mold",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1750291200000,
+      "tag": "0001_add_cover_image",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1750377600000,
+      "tag": "0002_add_task_day_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1750464000000,
+      "tag": "0003_add_comments",
+      "breakpoints": true
+    }
+  ]
+}

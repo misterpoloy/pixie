@@ -42,7 +42,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const parsed = updateTaskSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.issues[0].message);
 
-  const { labelIds, dueDate, completedAt, ...rest } = parsed.data;
+  const { labelIds, dueDate, completedAt, isSomeday, isUpcoming, ...rest } = parsed.data;
+
+  // Capture who made this change — prefer X-Agent-Name header (set by MCP/API agents), fall back to user name
+  const agentName = req.headers.get("x-agent-name");
+  const updatedBy = agentName ?? null;
 
   let resolvedCompletedAt: Date | null | undefined;
   if (rest.status === "done" && !task.completedAt) {
@@ -56,13 +60,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const resolvedDueDate: Date | null | undefined =
     dueDate !== undefined ? (dueDate ? new Date(dueDate) : null) : undefined;
 
+  const normalizedFlags =
+    isSomeday === undefined && isUpcoming === undefined
+      ? {}
+      : isSomeday
+        ? { isSomeday: true, isUpcoming: false }
+        : isUpcoming
+          ? { isSomeday: false, isUpcoming: true }
+          : {
+              ...(isSomeday !== undefined && { isSomeday: false }),
+              ...(isUpcoming !== undefined && { isUpcoming: false }),
+            };
+
   const [updated] = await db
     .update(tasks)
     .set({
       ...rest,
+      ...normalizedFlags,
       ...(resolvedDueDate !== undefined && { dueDate: resolvedDueDate }),
       ...(resolvedCompletedAt !== undefined && { completedAt: resolvedCompletedAt }),
       updatedAt: new Date(),
+      ...(updatedBy !== null && { updatedBy }),
     })
     .where(eq(tasks.id, id))
     .returning();

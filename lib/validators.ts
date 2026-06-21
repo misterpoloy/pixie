@@ -35,9 +35,12 @@ export const createTaskSchema = z.object({
   dueDate: z.string().datetime().optional().nullable(),
   dueTime: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
   isSomeday: z.boolean().optional(),
+  isUpcoming: z.boolean().optional(),
   isInbox: z.boolean().optional(),
   labelIds: z.array(z.string().uuid()).optional(),
   sortOrder: z.number().int().optional(),
+  coverImage: z.string().url().optional().nullable(),
+  hideOverdue: z.boolean().optional(),
 });
 
 export const updateTaskSchema = createTaskSchema.partial().extend({

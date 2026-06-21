@@ -12,6 +12,8 @@ interface Task {
   priority: "none" | "low" | "medium" | "high";
   dueDate?: string | null;
   isSomeday?: boolean;
+  isUpcoming?: boolean;
+  createdAt?: string;
   parentId?: string | null;
   subtasks?: Task[];
 }
@@ -21,6 +23,7 @@ interface Props {
   emptyMessage?: string;
   showAdd?: boolean;
   addDefaults?: Record<string, unknown>;
+  metaMode?: "default" | "upcoming";
   title?: string;
 }
 
@@ -40,7 +43,14 @@ function nestTasks(flat: Task[]): Task[] {
   return roots;
 }
 
-export default function TaskList({ apiUrl, emptyMessage, showAdd = true, addDefaults, title }: Props) {
+export default function TaskList({
+  apiUrl,
+  emptyMessage,
+  showAdd = true,
+  addDefaults,
+  metaMode = "default",
+  title,
+}: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [openTask, setOpenTask] = useState<Task | null>(null);
@@ -82,6 +92,7 @@ export default function TaskList({ apiUrl, emptyMessage, showAdd = true, addDefa
           <TaskItem
             key={task.id}
             task={task}
+            metaMode={metaMode}
             onOpen={setOpenTask}
             onRefresh={load}
           />
@@ -100,7 +111,7 @@ export default function TaskList({ apiUrl, emptyMessage, showAdd = true, addDefa
           </summary>
           <div style={{ opacity: 0.5, marginTop: 8 }}>
             {done.map((task) => (
-              <TaskItem key={task.id} task={task} onOpen={setOpenTask} onRefresh={load} />
+              <TaskItem key={task.id} task={task} metaMode={metaMode} onOpen={setOpenTask} onRefresh={load} />
             ))}
           </div>
         </details>
