@@ -357,7 +357,6 @@ body::before {
 
 .task-card {
   width: 250px;
-  min-height: 185px;
   border-radius: var(--radius-md);
   background: var(--bg-card);
   backdrop-filter: blur(16px);
@@ -397,6 +396,9 @@ body::before {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+}
+
+.task-card-cover + .task-card-body {
   border-top: 1px solid var(--glass-border);
 }
 
