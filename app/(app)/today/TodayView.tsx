@@ -6,6 +6,7 @@ import TaskItem from "@/components/tasks/TaskItem";
 import AddTaskInline from "@/components/tasks/AddTaskInline";
 import TaskDetailModal from "@/components/tasks/TaskDetailModal";
 import RightBar from "@/components/layout/RightBar";
+import NavRail from "@/components/layout/NavRail";
 import MiniCalendar from "@/components/widgets/MiniCalendar";
 import WorldClock from "@/components/widgets/WorldClock";
 import ViewToggle, { type ViewMode } from "@/components/ui/ViewToggle";
@@ -45,7 +46,8 @@ export default function TodayView({ dateStr }: { dateStr: string }) {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [openTask, setOpenTask] = useState<Task | null>(null);
-  const [showWidgets, setShowWidgets] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showClock, setShowClock] = useState(false);
 
   // Persist view preference
   useEffect(() => {
@@ -88,36 +90,13 @@ export default function TodayView({ dateStr }: { dateStr: string }) {
 
   return (
     <>
-      {/* Page header with toggles */}
+      {/* Page header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28 }}>
         <div>
           <h1 className="page-title" style={{ marginBottom: 4 }}>{dateStr}</h1>
           <p style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600, color: "var(--accent-hover)", letterSpacing: "-0.01em" }}>Today</p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <ViewToggle mode={viewMode} onChange={changeView} />
-          <button
-            onClick={() => setShowWidgets((v) => !v)}
-            title={showWidgets ? "Hide widgets" : "Show calendar & clocks"}
-            style={{
-              background: showWidgets ? "var(--bg-active)" : "var(--bg-card)",
-              border: "1px solid var(--glass-border)",
-              borderRadius: "var(--radius-sm)",
-              padding: "5px 8px",
-              cursor: "pointer",
-              color: showWidgets ? "var(--text-primary)" : "var(--text-muted)",
-              transition: "all var(--transition-fast)",
-              display: "flex", alignItems: "center",
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-              <rect x="1" y="1" width="5.5" height="6.5" rx="1.5" fill="currentColor" />
-              <rect x="8.5" y="1" width="5.5" height="3" rx="1.5" fill="currentColor" />
-              <rect x="8.5" y="5.5" width="5.5" height="8.5" rx="1.5" fill="currentColor" />
-              <rect x="1" y="9" width="5.5" height="5" rx="1.5" fill="currentColor" />
-            </svg>
-          </button>
-        </div>
+        <ViewToggle mode={viewMode} onChange={changeView} />
       </div>
 
       {loading && (
@@ -194,10 +173,17 @@ export default function TodayView({ dateStr }: { dateStr: string }) {
         </Suspense>
       )}
 
-      {showWidgets && (
+      <NavRail
+        showCalendar={showCalendar}
+        onCalendar={() => setShowCalendar((v) => !v)}
+        showClock={showClock}
+        onClock={() => setShowClock((v) => !v)}
+      />
+
+      {(showCalendar || showClock) && (
         <RightBar>
-          <MiniCalendar />
-          <WorldClock />
+          {showCalendar && <MiniCalendar />}
+          {showClock && <WorldClock />}
         </RightBar>
       )}
     </>
