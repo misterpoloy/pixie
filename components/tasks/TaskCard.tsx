@@ -2,12 +2,6 @@
 
 import { formatDate, isToday, isTomorrow } from "@/lib/date-helpers";
 
-interface Subtask {
-  id: string;
-  title: string;
-  status: "pending" | "in_progress" | "done" | "cancelled";
-}
-
 interface Task {
   id: string;
   title: string;
@@ -17,14 +11,14 @@ interface Task {
   notes?: string | null;
   coverImage?: string | null;
   isSomeday?: boolean;
+  isUpcoming?: boolean;
   hideOverdue?: boolean;
-  subtasks?: Subtask[];
+  subtasks?: Task[];
 }
 
 interface Props {
   task: Task;
   onOpen: (task: Task) => void;
-  onToggle: (id: string, done: boolean) => void;
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -58,7 +52,7 @@ function dueDateLabel(
 const MAX_VISIBLE = 3;
 
 interface SubtaskStripProps {
-  subtasks: Subtask[];
+  subtasks: Task[];
   onSubtaskToggle?: (id: string, done: boolean) => void;
 }
 
@@ -123,22 +117,11 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
 
 // ── TaskCard ──────────────────────────────────────────────────────────────────
 
-export default function TaskCard({ task, onOpen, onToggle }: Props) {
+export default function TaskCard({ task, onOpen }: Props) {
   const isDone = task.status === "done";
   const dateInfo = dueDateLabel(task.dueDate, task.hideOverdue);
   const hasCover = !!task.coverImage;
   const subtasks = task.subtasks ?? [];
-
-  async function toggle(e: React.MouseEvent) {
-    e.stopPropagation();
-    const newStatus = isDone ? "pending" : "done";
-    await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    onToggle(task.id, !isDone);
-  }
 
   async function handleSubtaskToggle(id: string, done: boolean) {
     await fetch(`/api/tasks/${id}`, {
@@ -207,44 +190,29 @@ export default function TaskCard({ task, onOpen, onToggle }: Props) {
               {task.isUpcoming && <span className="task-card-badge task-card-badge--upcoming">Upcoming</span>}
             </div>
           )}
-          <div
-            className="task-card-title"
-            style={{
-              textDecoration: isDone ? "line-through" : "none",
-              color: isDone ? "var(--text-muted)" : "var(--text-primary)",
-            }}
-          >
-            {task.title}
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+            <div
+              className="task-card-title"
+              style={{
+                textDecoration: isDone ? "line-through" : "none",
+                color: isDone ? "var(--text-muted)" : "var(--text-primary)",
+              }}
+            >
+              {task.title}
+            </div>
+            {dateInfo && (
+              <span style={{ color: dateInfo.color, fontSize: "0.72rem", flexShrink: 0 }}>
+                {dateInfo.text}
+              </span>
+            )}
           </div>
 
-          {(dateInfo || task.notes) && (
+          {task.notes && (
             <div className="task-card-meta">
-              {dateInfo && (
-                <span style={{ color: dateInfo.color, fontSize: "0.72rem" }}>
-                  {dateInfo.text}
-                </span>
-              )}
-              {task.notes && (
-                <span style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>
-                  · notes
-                </span>
-              )}
+              <span style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>notes</span>
             </div>
           )}
         </div>
-
-        <button
-          className={`task-check ${isDone ? "done" : ""}`}
-          onClick={toggle}
-          aria-label={isDone ? "Mark incomplete" : "Mark complete"}
-          style={{ flexShrink: 0, alignSelf: "flex-end", marginBottom: 2 }}
-        >
-          {isDone && (
-            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-              <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
       </div>
 
       {/* Subtask strip — only rendered when subtasks exist */}
