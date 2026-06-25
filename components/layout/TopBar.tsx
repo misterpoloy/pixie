@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { Wallet, CheckSquare, ChevronDown, Search, Bell, ExternalLink } from 'lucide-react'
+import { Wallet, CheckSquare, ChevronDown, Search, Bell, ExternalLink, Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useLayout } from '@/components/layout/LayoutContext'
 
 // ── Waffle icon (Microsoft-style 3×3 grid) ───────────────────────────────────
 function WaffleIcon({ className }: { className?: string }) {
@@ -142,6 +143,7 @@ function AppLauncher({ activeAppId, onClose }: { activeAppId: string; onClose: (
 export function TopBar() {
   const [launcherOpen, setLauncherOpen] = useState(false)
   const activeApp = APPS.find(a => a.id === 'pixie')!
+  const { toggleSidebar } = useLayout()
 
   return (
     <header
@@ -152,8 +154,16 @@ export function TopBar() {
         zIndex: 150,
       }}
     >
-      {/* ── Left: waffle + app identity ─────────────────────────────────────── */}
+      {/* ── Left: hamburger (mobile) + waffle + app identity ───────────────── */}
       <div className="flex items-center h-full relative">
+        {/* Hamburger — mobile only */}
+        <button
+          onClick={toggleSidebar}
+          className="md:hidden w-11 h-full flex items-center justify-center text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-colors flex-shrink-0"
+          aria-label="Toggle menu"
+        >
+          <Menu className="w-[18px] h-[18px]" />
+        </button>
         <button
           onClick={() => setLauncherOpen(v => !v)}
           className={cn(
