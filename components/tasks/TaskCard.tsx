@@ -56,7 +56,7 @@ function ageDays(createdAt?: string): number | null {
 // Shows up to MAX_VISIBLE subtask rows + a thin progress bar.
 // Designed as a standalone composable section so it can be reused elsewhere.
 
-const MAX_VISIBLE = 3;
+const MAX_VISIBLE = 10;
 
 interface SubtaskStripProps {
   subtasks: Task[];
