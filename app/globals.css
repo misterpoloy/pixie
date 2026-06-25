@@ -538,6 +538,19 @@ body::before {
   font-weight: 500;
 }
 
+.task-card-subtask-age {
+  flex-shrink: 0;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  padding: 1px 5px;
+  line-height: 1.4;
+}
+
 /* ── Nav rail (VS Code-style vertical icon bar, right edge) ─────────────── */
 .nav-rail {
   position: fixed;

@@ -13,6 +13,7 @@ interface Task {
   isSomeday?: boolean;
   isUpcoming?: boolean;
   hideOverdue?: boolean;
+  createdAt?: string;
   subtasks?: Task[];
 }
 
@@ -43,6 +44,12 @@ function dueDateLabel(
     return { text: `+${days}d`, color: "var(--info)" };
   }
   return { text: formatDate(date), color: "var(--text-muted)" };
+}
+
+function ageDays(createdAt?: string): number | null {
+  if (!createdAt) return null;
+  const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
+  return days > 0 ? days : null;
 }
 
 // ── SubtaskStrip ──────────────────────────────────────────────────────────────
@@ -78,6 +85,7 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
       <div className="task-card-subtasks-list">
         {visible.map((sub) => {
           const done = sub.status === "done";
+          const age = !done ? ageDays(sub.createdAt) : null;
           return (
             <div
               key={sub.id}
@@ -99,10 +107,14 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
                 style={{
                   textDecoration: done ? "line-through" : "none",
                   color: done ? "var(--text-muted)" : "var(--text-secondary)",
+                  flex: 1,
                 }}
               >
                 {sub.title}
               </span>
+              {age !== null && (
+                <span className="task-card-subtask-age">{age}d</span>
+              )}
             </div>
           );
         })}
