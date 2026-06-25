@@ -50,9 +50,16 @@ function dueDateLabel(
   return { text: formatDate(date), color: "var(--text-muted)" };
 }
 
+function isCreatedToday(createdAt?: string): boolean {
+  if (!createdAt) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return createdAt.slice(0, 10) === today;
+}
+
 export default function TaskItem({ task, depth = 0, metaMode = "default", onToggle, onOpen, onRefresh }: Props) {
   const [expanded, setExpanded] = useState(true);
   const isDone = task.status === "done";
+  const createdToday = !isDone && isCreatedToday(task.createdAt);
   const dateInfo = dueDateLabel(task.dueDate, task.hideOverdue);
   const metaText =
     metaMode === "upcoming" && task.isUpcoming && task.createdAt
@@ -73,7 +80,15 @@ export default function TaskItem({ task, depth = 0, metaMode = "default", onTogg
 
   return (
     <div>
-      <div className="task-item" style={{ paddingLeft: depth > 0 ? `${12 + depth * 16}px` : undefined }}>
+      <div
+        className="task-item"
+        style={{
+          paddingLeft: depth > 0 ? `${12 + depth * 16}px` : undefined,
+          borderLeft: createdToday ? "2px solid var(--accent)" : undefined,
+          background: createdToday ? "rgba(124,110,247,0.06)" : undefined,
+          borderRadius: createdToday ? "var(--radius-sm)" : undefined,
+        }}
+      >
         {/* Expand toggle for subtasks */}
         {hasSubtasks && (
           <button
