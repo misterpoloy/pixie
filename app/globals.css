@@ -364,7 +364,7 @@ body::before {
 }
 
 .task-card {
-  width: 250px;
+  width: 100%;
   border-radius: var(--radius-md);
   background: var(--bg-card);
   backdrop-filter: blur(16px);
