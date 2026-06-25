@@ -5,6 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
 import AddTaskInline from "./AddTaskInline";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import SubtaskTagPicker from "./SubtaskTagPicker";
+
+interface TaskLabel {
+  labelId: string;
+  name: string;
+  color: string;
+}
 
 interface Task {
   id: string;
@@ -18,6 +25,7 @@ interface Task {
   isUpcoming?: boolean;
   hideOverdue?: boolean;
   subtasks?: Task[];
+  labels?: TaskLabel[];
   listId?: string | null;
   coverImage?: string | null;
   createdAt?: string;
@@ -359,6 +367,7 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
   const [showCompleted, setShowCompleted] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedSub, setSelectedSub] = useState<Task | null>(null);
+  const [tagPickerSubId, setTagPickerSubId] = useState<string | null>(null);
 
   // Load full task data
   useEffect(() => {
@@ -605,38 +614,91 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
         {visibleSubs.map((sub) => {
           const done = sub.status === "done";
           const isSelected = selectedSub?.id === sub.id;
+          const subLabels = sub.labels ?? [];
+          const pickerOpen = tagPickerSubId === sub.id;
           return (
-            <div key={sub.id} style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "7px 0", borderBottom: "1px solid var(--glass-border)",
-              opacity: done ? 0.6 : 1,
-              background: isSelected ? "rgba(124,110,247,0.06)" : "transparent",
-              transition: "all var(--transition-fast)",
-              borderRadius: isSelected ? 6 : 0,
-            }}>
-              {/* Checkbox — toggles status */}
-              <button className={`task-check ${done ? "done" : ""}`} style={{ width: 17, height: 17, minWidth: 17, flexShrink: 0 }} onClick={() => toggleSubStatus(sub)}>
-                {done && <svg width="8" height="6" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-              </button>
+            <div key={sub.id} style={{ position: "relative" }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "7px 0", borderBottom: "1px solid var(--glass-border)",
+                opacity: done ? 0.6 : 1,
+                background: isSelected ? "rgba(124,110,247,0.06)" : "transparent",
+                transition: "all var(--transition-fast)",
+                borderRadius: isSelected ? 6 : 0,
+              }}>
+                {/* Checkbox */}
+                <button className={`task-check ${done ? "done" : ""}`} style={{ width: 17, height: 17, minWidth: 17, flexShrink: 0 }} onClick={() => toggleSubStatus(sub)}>
+                  {done && <svg width="8" height="6" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                </button>
 
-              {/* Title — clicking opens detail panel */}
-              <span
-                onClick={() => isSelected ? closeSub() : openSub(sub)}
-                style={{
-                  flex: 1, fontSize: "0.875rem",
-                  color: done ? "var(--text-muted)" : isSelected ? "var(--accent-hover)" : "var(--text-primary)",
-                  textDecoration: done ? "line-through" : "none",
-                  cursor: "pointer",
-                  transition: "color var(--transition-fast)",
-                }}
-              >
-                {sub.title}
-              </span>
+                {/* Title */}
+                <span
+                  onClick={() => isSelected ? closeSub() : openSub(sub)}
+                  style={{
+                    flex: 1, fontSize: "0.875rem",
+                    color: done ? "var(--text-muted)" : isSelected ? "var(--accent-hover)" : "var(--text-primary)",
+                    textDecoration: done ? "line-through" : "none",
+                    cursor: "pointer", transition: "color var(--transition-fast)",
+                  }}
+                >
+                  {sub.title}
+                </span>
 
-              {/* Open panel indicator */}
-              <span style={{ fontSize: "0.65rem", color: isSelected ? "var(--accent)" : "var(--text-muted)", opacity: isSelected ? 1 : 0, transition: "opacity var(--transition-fast)", paddingRight: 4 }}>
-                ›
-              </span>
+                {/* Label pills */}
+                {subLabels.map((lbl) => (
+                  <span key={lbl.labelId} style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "2px 7px", borderRadius: "var(--radius-full)",
+                    fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.02em",
+                    background: `${lbl.color}22`,
+                    border: `1px solid ${lbl.color}55`,
+                    color: lbl.color,
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: lbl.color, display: "inline-block" }} />
+                    {lbl.name}
+                  </span>
+                ))}
+
+                {/* Add tag button */}
+                {!done && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setTagPickerSubId(pickerOpen ? null : sub.id); }}
+                    title="Add tag"
+                    style={{
+                      width: 20, height: 20, borderRadius: 4, border: "1px dashed var(--glass-border)",
+                      background: "transparent", color: "var(--text-muted)", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "0.75rem", flexShrink: 0, lineHeight: 1,
+                      transition: "all var(--transition-fast)",
+                    }}
+                  >
+                    #
+                  </button>
+                )}
+
+                {/* Open panel indicator */}
+                <span style={{ fontSize: "0.65rem", color: isSelected ? "var(--accent)" : "var(--text-muted)", opacity: isSelected ? 1 : 0, transition: "opacity var(--transition-fast)", paddingRight: 4 }}>
+                  ›
+                </span>
+              </div>
+
+              {/* Tag picker popover */}
+              {pickerOpen && (
+                <SubtaskTagPicker
+                  taskId={sub.id}
+                  current={subLabels.map((l) => ({ id: l.labelId, name: l.name, color: l.color }))}
+                  onUpdate={(updated) => {
+                    setSubtasks((prev) => prev.map((s) =>
+                      s.id === sub.id
+                        ? { ...s, labels: updated.map((u) => ({ labelId: u.id, name: u.name, color: u.color })) }
+                        : s
+                    ));
+                  }}
+                  onClose={() => setTagPickerSubId(null)}
+                />
+              )}
             </div>
           );
         })}
