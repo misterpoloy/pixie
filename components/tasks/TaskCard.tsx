@@ -22,6 +22,7 @@ interface Task {
 interface Props {
   task: Task;
   onOpen: (task: Task) => void;
+  referenceDate?: string; // YYYY-MM-DD for highlight system; defaults to today
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -63,17 +64,18 @@ const MAX_VISIBLE = 10;
 interface SubtaskStripProps {
   subtasks: Task[];
   onSubtaskToggle?: (id: string, done: boolean) => void;
+  referenceDate?: string;
 }
 
-function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
+function SubtaskStrip({ subtasks, onSubtaskToggle, referenceDate }: SubtaskStripProps) {
   if (!subtasks.length) return null;
 
   const doneCount = subtasks.filter((s) => s.status === "done").length;
   const progress = doneCount / subtasks.length;
 
-  // Pending first, then done-today last; hide older completed items
+  // Pending first, then done-on-referenceDate last; hide older completed
   const pending = subtasks.filter((s) => s.status !== "done" && s.status !== "cancelled");
-  const doneToday = subtasks.filter((s) => s.status === "done" && resolveHighlight(s) !== null);
+  const doneToday = subtasks.filter((s) => s.status === "done" && resolveHighlight(s, referenceDate) !== null);
   const showable = [...pending, ...doneToday];
   const visible = showable.slice(0, MAX_VISIBLE);
   const overflow = showable.length - MAX_VISIBLE;
@@ -92,7 +94,7 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
       <div className="task-card-subtasks-list">
         {visible.map((sub) => {
           const done = sub.status === "done";
-          const hl = resolveHighlight(sub);
+          const hl = resolveHighlight(sub, referenceDate);
           const age = !done ? ageDays(sub.createdAt) : null;
           return (
             <div
@@ -148,7 +150,7 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
 
 // ── TaskCard ──────────────────────────────────────────────────────────────────
 
-export default function TaskCard({ task, onOpen }: Props) {
+export default function TaskCard({ task, onOpen, referenceDate }: Props) {
   const isDone = task.status === "done";
   const dateInfo = dueDateLabel(task.dueDate, task.hideOverdue);
   const hasCover = !!task.coverImage;
@@ -248,7 +250,7 @@ export default function TaskCard({ task, onOpen }: Props) {
 
       {/* Subtask strip — only rendered when subtasks exist */}
       {subtasks.length > 0 && (
-        <SubtaskStrip subtasks={subtasks} onSubtaskToggle={handleSubtaskToggle} />
+        <SubtaskStrip subtasks={subtasks} onSubtaskToggle={handleSubtaskToggle} referenceDate={referenceDate} />
       )}
     </div>
   );

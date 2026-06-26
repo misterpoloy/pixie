@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { db, tasks, taskLabels } from "@/lib/db";
+import { db, tasks, taskLabels, taskDayEntries } from "@/lib/db";
 import { resolveUserId } from "@/lib/auth-helpers";
 import { createTaskSchema } from "@/lib/validators";
 import { ok, err, unauthorized } from "@/lib/api-response";
@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const view = searchParams.get("view");
+  const date = searchParams.get("date"); // YYYY-MM-DD — fetch tasks for a specific date
   const listId = searchParams.get("listId");
   const sectionId = searchParams.get("sectionId");
   const parentId = searchParams.get("parentId");
@@ -24,6 +25,62 @@ export async function GET(req: NextRequest) {
   if (parentId === "null") conditions.push(isNull(tasks.parentId));
   else if (parentId) conditions.push(eq(tasks.parentId, parentId));
   if (status) conditions.push(eq(tasks.status, status as any));
+
+  // ?date=YYYY-MM-DD — fetch tasks for a specific calendar date
+  // Today: same logic as view=today. Past: use snapshot (taskDayEntries).
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    if (date === todayStr) {
+      // Reuse today logic: tasks due today or overdue
+      const now = new Date();
+      conditions.push(lte(tasks.dueDate, endOfDay(now)));
+      const parentRows = await db.select().from(tasks)
+        .where(and(...conditions))
+        .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
+      if (parentRows.length === 0) return ok([]);
+      const parentIds = parentRows.map((r) => r.id);
+      const childRows = await db.select().from(tasks)
+        .where(and(eq(tasks.userId, userId), inArray(tasks.parentId, parentIds)))
+        .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
+      return ok([...parentRows, ...childRows]);
+    }
+
+    // Past date: look up snapshot — tasks that were open that day
+    const snapshotRows = await db
+      .select({ taskId: taskDayEntries.taskId })
+      .from(taskDayEntries)
+      .where(and(eq(taskDayEntries.userId, userId), eq(taskDayEntries.date, date)));
+
+    const snapshotIds = snapshotRows.map((r) => r.taskId);
+    if (snapshotIds.length === 0) return ok([]);
+
+    // Also include tasks completed on this date (completedAt on that day)
+    const [dayStart, dayEnd] = [
+      new Date(`${date}T00:00:00`),
+      new Date(`${date}T23:59:59.999`),
+    ];
+    const completedRows = await db.select({ id: tasks.id }).from(tasks)
+      .where(and(
+        eq(tasks.userId, userId),
+        gte(tasks.completedAt, dayStart),
+        lte(tasks.completedAt, dayEnd),
+        isNull(tasks.parentId),
+      ));
+    const completedIds = completedRows.map((r) => r.id);
+
+    const allParentIds = [...new Set([...snapshotIds, ...completedIds])];
+    const parentRows = await db.select().from(tasks)
+      .where(and(eq(tasks.userId, userId), inArray(tasks.id, allParentIds)))
+      .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
+
+    if (parentRows.length === 0) return ok([]);
+    const childRows = await db.select().from(tasks)
+      .where(and(eq(tasks.userId, userId), inArray(tasks.parentId, allParentIds)))
+      .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
+
+    return ok([...parentRows, ...childRows]);
+  }
 
   if (view === "today") {
     const now = new Date();

@@ -46,6 +46,7 @@ interface Comment {
 interface Props {
   task: Task;
   onClose: () => void;
+  referenceDate?: string; // YYYY-MM-DD for highlight system
 }
 
 // ── Chip style maps ────────────────────────────────────────────────────────────
@@ -356,7 +357,7 @@ function MetaRow({ icon, label, value, valueColor, title }: { icon: string; labe
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function TaskDetailModal({ task: initial, onClose }: Props) {
+export default function TaskDetailModal({ task: initial, onClose, referenceDate }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -581,9 +582,9 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
 
   const openSubs = subtasks.filter((s) => s.status !== "done" && s.status !== "cancelled");
   // Completed today: resolved highlight exists (completedTodayHighlight fires) — shown by default
-  const doneTodaySubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s) !== null);
-  // Completed on a previous day: hidden by default, revealed by toggle
-  const doneOlderSubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s) === null);
+  const doneTodaySubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s, referenceDate) !== null);
+  // Completed on a day other than referenceDate: hidden by default, revealed by toggle
+  const doneOlderSubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s, referenceDate) === null);
 
   // Default view: pending + today's completed. Expanded view: also adds older completed.
   const visibleSubs = showCompleted
@@ -634,7 +635,7 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
           return (
             <div key={sub.id} style={{ position: "relative" }}>
               {(() => {
-                const hl = resolveHighlight(sub);
+                const hl = resolveHighlight(sub, referenceDate);
                 return (
               <div style={{
                 display: "flex", alignItems: "center", gap: 8,

@@ -1,6 +1,7 @@
 // Extensible subtask highlight system.
 // Add new resolvers to HIGHLIGHT_RESOLVERS to apply color accents based on any condition.
-// Each resolver receives a subtask and returns a highlight config or null.
+// Each resolver receives a subtask and a reference date (YYYY-MM-DD) and returns a highlight or null.
+// referenceDate defaults to today's local date — pass the calendar-selected date to shift accents.
 
 export interface SubtaskHighlight {
   textColor: string;
@@ -18,19 +19,23 @@ interface SubtaskLike {
   status: string;
 }
 
-type HighlightResolver = (sub: SubtaskLike) => SubtaskHighlight | null;
+type HighlightResolver = (sub: SubtaskLike, ref: string) => SubtaskHighlight | null;
 
-const localDateStr = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
+// Convert a Date (or ISO string) to local YYYY-MM-DD
+function toLocalDateStr(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
-// Resolver: created today → accent blue
-const createdTodayHighlight: HighlightResolver = (sub) => {
+// Today's local date — used as default referenceDate
+export function todayLocalStr(): string {
+  return toLocalDateStr(new Date());
+}
+
+// Resolver: created on referenceDate → accent blue
+const createdOnDateHighlight: HighlightResolver = (sub, ref) => {
   if (!sub.createdAt) return null;
-  const created = new Date(sub.createdAt);
-  const createdLocal = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}-${String(created.getDate()).padStart(2, "0")}`;
-  if (createdLocal !== localDateStr()) return null;
+  if (toLocalDateStr(sub.createdAt) !== ref) return null;
   return {
     textColor: "var(--accent-hover)",
     badgeColor: "var(--accent)",
@@ -42,13 +47,11 @@ const createdTodayHighlight: HighlightResolver = (sub) => {
   };
 };
 
-// Resolver: completed today → accent blue (dimmed, shown with strikethrough)
-const completedTodayHighlight: HighlightResolver = (sub) => {
+// Resolver: completed on referenceDate → accent blue with strikethrough treatment
+const completedOnDateHighlight: HighlightResolver = (sub, ref) => {
   if (sub.status !== "done") return null;
   if (!sub.completedAt) return null;
-  const completed = new Date(sub.completedAt);
-  const completedLocal = `${completed.getFullYear()}-${String(completed.getMonth() + 1).padStart(2, "0")}-${String(completed.getDate()).padStart(2, "0")}`;
-  if (completedLocal !== localDateStr()) return null;
+  if (toLocalDateStr(sub.completedAt) !== ref) return null;
   return {
     textColor: "var(--accent-hover)",
     badgeColor: "var(--accent)",
@@ -62,14 +65,16 @@ const completedTodayHighlight: HighlightResolver = (sub) => {
 
 // Registry — push new resolvers here as filters are introduced
 export const HIGHLIGHT_RESOLVERS: HighlightResolver[] = [
-  createdTodayHighlight,
-  completedTodayHighlight,
+  createdOnDateHighlight,
+  completedOnDateHighlight,
 ];
 
-export function resolveHighlight(sub: SubtaskLike): SubtaskHighlight | null {
-  // Allow done items through — completedTodayHighlight handles them
+// Pass referenceDate (YYYY-MM-DD) to evaluate against a specific date.
+// Omit or pass undefined to use today (backwards-compatible default).
+export function resolveHighlight(sub: SubtaskLike, referenceDate?: string): SubtaskHighlight | null {
+  const ref = referenceDate ?? todayLocalStr();
   for (const resolve of HIGHLIGHT_RESOLVERS) {
-    const h = resolve(sub);
+    const h = resolve(sub, ref);
     if (h) return h;
   }
   return null;
