@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           .from(taskLabels)
           .innerJoin(labels, eq(taskLabels.labelId, labels.id))
           .where(inArray(taskLabels.taskId, subtaskIds))
-      : Promise.resolve([]),
+      : Promise.resolve([] as { taskId: string; labelId: string; name: string; color: string }[]),
   ]);
 
   // Group subtask labels by taskId
