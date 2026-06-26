@@ -6,6 +6,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import AddTaskInline from "./AddTaskInline";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import SubtaskTagPicker from "./SubtaskTagPicker";
+import SubtaskMovePicker from "./SubtaskMovePicker";
 import { resolveHighlight } from "@/lib/subtask-highlights";
 
 interface TaskLabel {
@@ -370,6 +371,7 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedSub, setSelectedSub] = useState<Task | null>(null);
   const [tagPickerSubId, setTagPickerSubId] = useState<string | null>(null);
+  const [movePickerSubId, setMovePickerSubId] = useState<string | null>(null);
 
   // Load full task data
   useEffect(() => {
@@ -618,6 +620,7 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
           const isSelected = selectedSub?.id === sub.id;
           const subLabels = sub.labels ?? [];
           const pickerOpen = tagPickerSubId === sub.id;
+          const movePickerOpen = movePickerSubId === sub.id;
           return (
             <div key={sub.id} style={{ position: "relative" }}>
               {(() => {
@@ -674,7 +677,7 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
                 {/* Add tag button */}
                 {!done && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); setTagPickerSubId(pickerOpen ? null : sub.id); }}
+                    onClick={(e) => { e.stopPropagation(); setTagPickerSubId(pickerOpen ? null : sub.id); setMovePickerSubId(null); }}
                     title="Add tag"
                     style={{
                       width: 20, height: 20, borderRadius: 4, border: "1px dashed var(--glass-border)",
@@ -685,6 +688,27 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
                     }}
                   >
                     #
+                  </button>
+                )}
+
+                {/* Move to button */}
+                {!done && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMovePickerSubId(movePickerOpen ? null : sub.id); setTagPickerSubId(null); }}
+                    title="Move to another task"
+                    style={{
+                      width: 20, height: 20, borderRadius: 4, border: "1px dashed var(--glass-border)",
+                      background: movePickerOpen ? "var(--accent-dim)" : "transparent",
+                      color: movePickerOpen ? "var(--accent-hover)" : "var(--text-muted)",
+                      cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0,
+                      transition: "all var(--transition-fast)",
+                    }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </button>
                 )}
 
@@ -719,6 +743,16 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
                     ));
                   }}
                   onClose={() => setTagPickerSubId(null)}
+                />
+              )}
+
+              {/* Move picker popover */}
+              {movePickerOpen && (
+                <SubtaskMovePicker
+                  subtaskId={sub.id}
+                  currentParentId={task.id}
+                  onMoved={refreshSubtasks}
+                  onClose={() => setMovePickerSubId(null)}
                 />
               )}
             </div>
