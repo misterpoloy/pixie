@@ -365,22 +365,28 @@ body::before {
 
 .task-card {
   width: 100%;
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius-lg);
+  background: rgba(22, 22, 34, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--glass-border);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
   overflow: hidden;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
   outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .task-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
   border-color: var(--glass-border-strong);
+}
+.task-card:active {
+  transform: scale(0.985);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 .task-card:focus-visible {
   border-color: var(--accent);
@@ -392,28 +398,28 @@ body::before {
 
 .task-card-cover {
   position: relative;
-  height: 108px;
+  height: 140px;
   flex-shrink: 0;
   overflow: hidden;
 }
 
-
 .task-card-body {
   flex: 1;
-  padding: 10px 12px;
+  padding: 12px 14px;
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
 
 .task-card-cover + .task-card-body {
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid rgba(255,255,255,0.06);
 }
 
 .task-card-title {
-  font-size: 0.85rem;
-  font-weight: 500;
-  line-height: 1.4;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -425,7 +431,7 @@ body::before {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 4px;
+  margin-top: 5px;
 }
 
 /* ── Comment bubble ─────────────────────────────────────────────────────────── */
@@ -907,10 +913,55 @@ body[data-layout~="right-bar"] .main-content {
     font-size: 1.6rem;
   }
 
-  /* Task card grid: 2-col on mobile */
+  /* Task card grid: single col on mobile for native feel */
   .task-card-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 0 2px;
+  }
+
+  /* Native card feel on mobile */
+  .task-card {
+    border-radius: 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3);
+    border-color: rgba(255,255,255,0.08);
+    background: rgba(20, 20, 32, 0.92);
+  }
+  .task-card:hover {
+    transform: none;
+  }
+  .task-card:active {
+    transform: scale(0.978);
+    transition: transform 0.1s ease;
+  }
+  .task-card-cover {
+    height: 180px;
+  }
+  .task-card-body {
+    padding: 14px 16px;
+  }
+  .task-card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.3;
+  }
+  .task-card-meta {
+    margin-top: 6px;
+  }
+
+  /* Subtask rows: taller touch targets */
+  .task-card-subtask-row {
+    min-height: 40px;
+    padding: 7px 14px;
+  }
+  .task-card-subtask-title {
+    font-size: 0.82rem;
+  }
+  .task-card-subtask-check {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
   }
 
   /* Task items: ensure touch-friendly tap targets */
@@ -960,8 +1011,7 @@ body[data-layout~="right-bar"] .main-content {
   }
 
   .task-card-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 12px;
   }
 
   /* Clock: also hide offset on tiny screens */
