@@ -156,10 +156,10 @@ export function TopBar() {
     >
       {/* ── Left: hamburger (mobile) + waffle + app identity ───────────────── */}
       <div className="flex items-center h-full relative">
-        {/* Hamburger — mobile only */}
+        {/* Hamburger — always visible */}
         <button
           onClick={toggleSidebar}
-          className="md:hidden w-11 h-full flex items-center justify-center text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-colors flex-shrink-0"
+          className="w-11 h-full flex items-center justify-center text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-colors flex-shrink-0"
           aria-label="Toggle menu"
         >
           <Menu className="w-[18px] h-[18px]" />

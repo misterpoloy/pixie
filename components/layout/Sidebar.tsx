@@ -68,12 +68,15 @@ export default function Sidebar() {
     });
   }, []);
 
-  // Close drawer on route change
-  useEffect(() => { closeSidebar(); }, [pathname, closeSidebar]);
-
-  // Lock body scroll when drawer open on mobile
+  // On mobile: close drawer on route change
   useEffect(() => {
-    if (sidebarOpen) {
+    if (window.innerWidth <= 768) closeSidebar();
+  }, [pathname, closeSidebar]);
+
+  // Lock body scroll only on mobile when drawer open
+  useEffect(() => {
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile && sidebarOpen) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -84,11 +87,11 @@ export default function Sidebar() {
   const isActive = (href: string) => pathname === href;
 
   const sidebarContent = (
-    <aside className={cn("sidebar", sidebarOpen && "sidebar--open")}>
+    <aside className={cn("sidebar", sidebarOpen ? "sidebar--open" : "sidebar--collapsed")}>
       <nav className="space-y-px">
         {NAV_VIEWS.map(({ href, label, icon }) => (
           <NavLink key={href} href={href} label={label} icon={icon}
-            active={isActive(href)} onClick={closeSidebar} />
+            active={isActive(href)} onClick={() => { if (window.innerWidth <= 768) closeSidebar(); }} />
         ))}
       </nav>
 
@@ -137,7 +140,7 @@ export default function Sidebar() {
       <div className="border-t border-white/[0.05] pt-3 space-y-px">
         {BOTTOM_VIEWS.map(({ href, label, icon }) => (
           <NavLink key={href} href={href} label={label} icon={icon}
-            active={isActive(href)} onClick={closeSidebar} />
+            active={isActive(href)} onClick={() => { if (window.innerWidth <= 768) closeSidebar(); }} />
         ))}
         <button
           onClick={() => signOut({ callbackUrl: "/auth/login" })}
