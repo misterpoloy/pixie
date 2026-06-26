@@ -6,6 +6,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import AddTaskInline from "./AddTaskInline";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import SubtaskTagPicker from "./SubtaskTagPicker";
+import { resolveHighlight } from "@/lib/subtask-highlights";
 
 interface TaskLabel {
   labelId: string;
@@ -618,16 +619,23 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
           const pickerOpen = tagPickerSubId === sub.id;
           return (
             <div key={sub.id} style={{ position: "relative" }}>
+              {(() => {
+                const hl = resolveHighlight(sub);
+                return (
               <div style={{
                 display: "flex", alignItems: "center", gap: 8,
-                padding: "7px 0", borderBottom: "1px solid var(--glass-border)",
+                padding: "7px 4px", borderBottom: "1px solid var(--glass-border)",
                 opacity: done ? 0.6 : 1,
-                background: isSelected ? "rgba(124,110,247,0.06)" : "transparent",
+                background: isSelected ? "rgba(124,110,247,0.06)" : hl ? hl.rowBg : "transparent",
                 transition: "all var(--transition-fast)",
-                borderRadius: isSelected ? 6 : 0,
+                borderRadius: isSelected || hl ? 6 : 0,
               }}>
                 {/* Checkbox */}
-                <button className={`task-check ${done ? "done" : ""}`} style={{ width: 17, height: 17, minWidth: 17, flexShrink: 0 }} onClick={() => toggleSubStatus(sub)}>
+                <button
+                  className={`task-check ${done ? "done" : ""}`}
+                  style={{ width: 17, height: 17, minWidth: 17, flexShrink: 0, ...(hl && !done ? { borderColor: hl.checkBorderColor } : {}) }}
+                  onClick={() => toggleSubStatus(sub)}
+                >
                   {done && <svg width="8" height="6" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                 </button>
 
@@ -636,7 +644,8 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
                   onClick={() => isSelected ? closeSub() : openSub(sub)}
                   style={{
                     flex: 1, fontSize: "0.875rem",
-                    color: done ? "var(--text-muted)" : isSelected ? "var(--accent-hover)" : "var(--text-primary)",
+                    color: done ? "var(--text-muted)" : isSelected ? "var(--accent-hover)" : hl ? hl.textColor : "var(--text-primary)",
+                    fontWeight: hl && !done ? 500 : 400,
                     textDecoration: done ? "line-through" : "none",
                     cursor: "pointer", transition: "color var(--transition-fast)",
                   }}
@@ -678,11 +687,23 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
                   </button>
                 )}
 
+                  {/* "new" highlight badge */}
+                {hl?.badgeLabel && (
+                  <span style={{
+                    fontSize: "0.6rem", fontWeight: 700, padding: "2px 6px",
+                    borderRadius: "var(--radius-full)", flexShrink: 0,
+                    color: hl.badgeColor, background: hl.badgeBg, border: `1px solid ${hl.badgeBorder}`,
+                  }}>
+                    {hl.badgeLabel}
+                  </span>
+                )}
+
                 {/* Open panel indicator */}
                 <span style={{ fontSize: "0.65rem", color: isSelected ? "var(--accent)" : "var(--text-muted)", opacity: isSelected ? 1 : 0, transition: "opacity var(--transition-fast)", paddingRight: 4 }}>
                   ›
                 </span>
               </div>
+              ); })()}
 
               {/* Tag picker popover */}
               {pickerOpen && (

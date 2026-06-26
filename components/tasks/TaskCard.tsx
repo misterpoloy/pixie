@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDate, isToday, isTomorrow } from "@/lib/date-helpers";
+import { resolveHighlight } from "@/lib/subtask-highlights";
 
 interface Task {
   id: string;
@@ -51,57 +52,6 @@ function ageDays(createdAt?: string): number | null {
   return Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
 }
 
-// ── Subtask highlight system ──────────────────────────────────────────────────
-// Extensible: add more resolvers here as filters are introduced.
-// Each resolver returns a highlight config or null (no highlight).
-
-interface SubtaskHighlight {
-  textColor: string;
-  badgeColor: string;
-  badgeBg: string;
-  badgeBorder: string;
-  rowBg: string;
-  checkBorderColor: string;
-  badgeLabel?: string; // overrides the default age label
-}
-
-type HighlightResolver = (sub: Task) => SubtaskHighlight | null;
-
-const localDateStr = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
-// Resolver: created today → accent blue
-const createdTodayHighlight: HighlightResolver = (sub) => {
-  if (!sub.createdAt) return null;
-  const created = new Date(sub.createdAt);
-  const createdLocal = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}-${String(created.getDate()).padStart(2, "0")}`;
-  if (createdLocal !== localDateStr()) return null;
-  return {
-    textColor: "var(--accent-hover)",
-    badgeColor: "var(--accent)",
-    badgeBg: "rgba(124,110,247,0.14)",
-    badgeBorder: "rgba(124,110,247,0.35)",
-    rowBg: "rgba(124,110,247,0.07)",
-    checkBorderColor: "var(--accent)",
-    badgeLabel: "new",
-  };
-};
-
-// Registry — add future resolvers here (overdue, priority filter, label filter…)
-const HIGHLIGHT_RESOLVERS: HighlightResolver[] = [
-  createdTodayHighlight,
-];
-
-function resolveHighlight(sub: Task): SubtaskHighlight | null {
-  if (sub.status === "done" || sub.status === "cancelled") return null;
-  for (const resolve of HIGHLIGHT_RESOLVERS) {
-    const h = resolve(sub);
-    if (h) return h;
-  }
-  return null;
-}
 
 // ── SubtaskStrip ──────────────────────────────────────────────────────────────
 // Shows up to MAX_VISIBLE subtask rows + a thin progress bar.
