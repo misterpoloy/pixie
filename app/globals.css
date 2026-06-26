@@ -358,7 +358,7 @@ body::before {
 /* ── Task cards (card view) ─────────────────────────────────────────────── */
 .task-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -847,6 +847,11 @@ body[data-layout~="right-bar"] .main-content {
 
 /* ── Tablet (≤ 1024px) ──────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
+  /* Drop to 2 columns on tablets before switching to mobile single-col */
+  .task-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .main-content {
     padding: 28px 32px;
   }
