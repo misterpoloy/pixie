@@ -83,6 +83,7 @@ export default function DraggableCardGrid({ tasks: propTasks, onOpen }: Props) {
           onDrop={(e) => onDrop(e, i)}
           onDragEnd={onDragEnd}
           style={{
+            minWidth: 0, // prevent grid item from exceeding 1fr track
             opacity: dragIndex === i ? 0.35 : 1,
             transform: dropIndex === i && dragIndex !== i ? "scale(1.02)" : "none",
             outline: dropIndex === i && dragIndex !== i

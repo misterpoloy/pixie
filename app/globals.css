@@ -377,8 +377,17 @@ body::before {
   align-items: start;
 }
 
+/* Grid items must not expand beyond their 1fr track.
+   CSS Grid has implicit min-width: auto on items, which lets content
+   (e.g. images with intrinsic size) blow out the column. min-width: 0
+   overrides this so every cell stays exactly 1fr regardless of content. */
+.task-card-grid > * {
+  min-width: 0;
+}
+
 .task-card {
   width: 100%;
+  min-width: 0;
   border-radius: var(--radius-lg);
   background: rgba(22, 22, 34, 0.85);
   backdrop-filter: blur(24px);
