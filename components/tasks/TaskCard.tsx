@@ -71,10 +71,10 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
   const doneCount = subtasks.filter((s) => s.status === "done").length;
   const progress = doneCount / subtasks.length;
 
-  // Always show pending + done-today; hide other done items
-  const showable = subtasks.filter(
-    (s) => s.status !== "done" || resolveHighlight(s) !== null
-  );
+  // Pending first, then done-today last; hide older completed items
+  const pending = subtasks.filter((s) => s.status !== "done" && s.status !== "cancelled");
+  const doneToday = subtasks.filter((s) => s.status === "done" && resolveHighlight(s) !== null);
+  const showable = [...pending, ...doneToday];
   const visible = showable.slice(0, MAX_VISIBLE);
   const overflow = showable.length - MAX_VISIBLE;
 
