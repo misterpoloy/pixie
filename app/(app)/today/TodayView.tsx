@@ -10,6 +10,7 @@ import NavRail from "@/components/layout/NavRail";
 import MiniCalendar from "@/components/widgets/MiniCalendar";
 import WorldClock from "@/components/widgets/WorldClock";
 import ViewToggle, { type ViewMode } from "@/components/ui/ViewToggle";
+import Bitacora from "@/components/bitacora/Bitacora";
 
 interface Task {
   id: string;
@@ -41,7 +42,7 @@ function nestTasks(flat: Task[]): Task[] {
 }
 
 
-export default function TodayView({ dateStr }: { dateStr: string }) {
+export default function TodayView({ dateStr, localDate }: { dateStr: string; localDate: string }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -172,6 +173,9 @@ export default function TodayView({ dateStr }: { dateStr: string }) {
           />
         </Suspense>
       )}
+
+      {/* ── Bitacora daily log ──────────────────────────────── */}
+      <Bitacora dateStr={localDate} />
 
       <NavRail
         showCalendar={showCalendar}

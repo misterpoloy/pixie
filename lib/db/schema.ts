@@ -274,6 +274,38 @@ export const notesRelations = relations(notes, ({ one }) => ({
   list: one(lists, { fields: [notes.listId], references: [lists.id] }),
 }));
 
+// ─── Bitacora (daily log / journal) ──────────────────────────────────────────
+// Extensible event log keyed by local date. source is a free varchar (not enum)
+// so new producers (agents, integrations, webhooks) register without migrations.
+// metadata jsonb handles future fields (mood, tags, ref IDs, run context, etc.).
+
+export const bitacoraEntries = pgTable("bitacora_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  entryDate: varchar("entry_date", { length: 10 }).notNull(), // YYYY-MM-DD local date
+  source: varchar("source", { length: 50 }).notNull().default("user"),   // 'user'|'agent'|'system'|anything
+  authorName: varchar("author_name", { length: 255 }).notNull().default("You"),
+  listId: uuid("list_id").references(() => lists.id, { onDelete: "set null" }),
+  taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
+  isPastDated: boolean("is_past_dated").notNull().default(false), // entry written for a past date
+  metadata: text("metadata"), // JSON string — jsonb-style extensibility without pgTyping overhead
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("bitacora_user_date_idx").on(t.userId, t.entryDate),
+  index("bitacora_list_idx").on(t.listId),
+]);
+
+export type BitacoraEntry = typeof bitacoraEntries.$inferSelect;
+export type NewBitacoraEntry = typeof bitacoraEntries.$inferInsert;
+
+export const bitacoraRelations = relations(bitacoraEntries, ({ one }) => ({
+  user: one(users, { fields: [bitacoraEntries.userId], references: [users.id] }),
+  list: one(lists, { fields: [bitacoraEntries.listId], references: [lists.id] }),
+  task: one(tasks, { fields: [bitacoraEntries.taskId], references: [tasks.id] }),
+}));
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type User = typeof users.$inferSelect;
