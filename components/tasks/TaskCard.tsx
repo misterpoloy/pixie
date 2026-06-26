@@ -51,9 +51,56 @@ function ageDays(createdAt?: string): number | null {
   return Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
 }
 
-function isCreatedToday(createdAt?: string): boolean {
-  if (!createdAt) return false;
-  return new Date(createdAt).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
+// ── Subtask highlight system ──────────────────────────────────────────────────
+// Extensible: add more resolvers here as filters are introduced.
+// Each resolver returns a highlight config or null (no highlight).
+
+interface SubtaskHighlight {
+  textColor: string;
+  badgeColor: string;
+  badgeBg: string;
+  badgeBorder: string;
+  rowBg: string;
+  checkBorderColor: string;
+  badgeLabel?: string; // overrides the default age label
+}
+
+type HighlightResolver = (sub: Task) => SubtaskHighlight | null;
+
+const localDateStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// Resolver: created today → accent blue
+const createdTodayHighlight: HighlightResolver = (sub) => {
+  if (!sub.createdAt) return null;
+  const created = new Date(sub.createdAt);
+  const createdLocal = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}-${String(created.getDate()).padStart(2, "0")}`;
+  if (createdLocal !== localDateStr()) return null;
+  return {
+    textColor: "var(--accent-hover)",
+    badgeColor: "var(--accent)",
+    badgeBg: "rgba(124,110,247,0.14)",
+    badgeBorder: "rgba(124,110,247,0.35)",
+    rowBg: "rgba(124,110,247,0.07)",
+    checkBorderColor: "var(--accent)",
+    badgeLabel: "new",
+  };
+};
+
+// Registry — add future resolvers here (overdue, priority filter, label filter…)
+const HIGHLIGHT_RESOLVERS: HighlightResolver[] = [
+  createdTodayHighlight,
+];
+
+function resolveHighlight(sub: Task): SubtaskHighlight | null {
+  if (sub.status === "done" || sub.status === "cancelled") return null;
+  for (const resolve of HIGHLIGHT_RESOLVERS) {
+    const h = resolve(sub);
+    if (h) return h;
+  }
+  return null;
 }
 
 // ── SubtaskStrip ──────────────────────────────────────────────────────────────
@@ -89,20 +136,18 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
       <div className="task-card-subtasks-list">
         {visible.map((sub) => {
           const done = sub.status === "done";
-          const today = !done && isCreatedToday(sub.createdAt);
+          const hl = resolveHighlight(sub);
           const age = !done ? ageDays(sub.createdAt) : null;
           return (
             <div
               key={sub.id}
               className="task-card-subtask-row"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSubtaskToggle?.(sub.id, !done);
-              }}
-              style={today ? { background: "rgba(124,110,247,0.06)", borderRadius: 5 } : undefined}
+              onClick={(e) => { e.stopPropagation(); onSubtaskToggle?.(sub.id, !done); }}
+              style={hl ? { background: hl.rowBg, borderRadius: 5 } : undefined}
             >
-              <span className={`task-card-subtask-check${done ? " done" : ""}`}
-                style={today ? { borderColor: "var(--accent)" } : undefined}
+              <span
+                className={`task-card-subtask-check${done ? " done" : ""}`}
+                style={hl ? { borderColor: hl.checkBorderColor } : undefined}
               >
                 {done && (
                   <svg width="7" height="6" viewBox="0 0 7 6" fill="none">
@@ -114,19 +159,23 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
                 className="task-card-subtask-title"
                 style={{
                   textDecoration: done ? "line-through" : "none",
-                  color: done ? "var(--text-muted)" : today ? "var(--accent-hover)" : "var(--text-secondary)",
+                  color: done ? "var(--text-muted)" : hl ? hl.textColor : "var(--text-secondary)",
                   flex: 1,
+                  fontWeight: hl ? 500 : 400,
                 }}
               >
                 {sub.title}
               </span>
               {age !== null && (
-                <span className="task-card-subtask-age" style={today ? {
-                  color: "var(--accent)",
-                  background: "rgba(124,110,247,0.12)",
-                  borderColor: "rgba(124,110,247,0.3)",
-                } : undefined}>
-                  {age === 0 ? "new" : `${age}d`}
+                <span
+                  className="task-card-subtask-age"
+                  style={hl ? {
+                    color: hl.badgeColor,
+                    background: hl.badgeBg,
+                    borderColor: hl.badgeBorder,
+                  } : undefined}
+                >
+                  {hl?.badgeLabel ?? (age === 0 ? "new" : `${age}d`)}
                 </span>
               )}
             </div>
