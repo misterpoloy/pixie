@@ -48,8 +48,12 @@ function dueDateLabel(
 
 function ageDays(createdAt?: string): number | null {
   if (!createdAt) return null;
-  const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
-  return days > 0 ? days : null;
+  return Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
+}
+
+function isCreatedToday(createdAt?: string): boolean {
+  if (!createdAt) return false;
+  return new Date(createdAt).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
 }
 
 // ── SubtaskStrip ──────────────────────────────────────────────────────────────
@@ -85,6 +89,7 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
       <div className="task-card-subtasks-list">
         {visible.map((sub) => {
           const done = sub.status === "done";
+          const today = !done && isCreatedToday(sub.createdAt);
           const age = !done ? ageDays(sub.createdAt) : null;
           return (
             <div
@@ -94,8 +99,11 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
                 e.stopPropagation();
                 onSubtaskToggle?.(sub.id, !done);
               }}
+              style={today ? { background: "rgba(124,110,247,0.06)", borderRadius: 5 } : undefined}
             >
-              <span className={`task-card-subtask-check${done ? " done" : ""}`}>
+              <span className={`task-card-subtask-check${done ? " done" : ""}`}
+                style={today ? { borderColor: "var(--accent)" } : undefined}
+              >
                 {done && (
                   <svg width="7" height="6" viewBox="0 0 7 6" fill="none">
                     <path d="M1 3L2.8 4.8L6 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -106,14 +114,20 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
                 className="task-card-subtask-title"
                 style={{
                   textDecoration: done ? "line-through" : "none",
-                  color: done ? "var(--text-muted)" : "var(--text-secondary)",
+                  color: done ? "var(--text-muted)" : today ? "var(--accent-hover)" : "var(--text-secondary)",
                   flex: 1,
                 }}
               >
                 {sub.title}
               </span>
               {age !== null && (
-                <span className="task-card-subtask-age">{age}d</span>
+                <span className="task-card-subtask-age" style={today ? {
+                  color: "var(--accent)",
+                  background: "rgba(124,110,247,0.12)",
+                  borderColor: "rgba(124,110,247,0.3)",
+                } : undefined}>
+                  {age === 0 ? "new" : `${age}d`}
+                </span>
               )}
             </div>
           );
