@@ -580,8 +580,15 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
   // ── Subtasks ──────────────────────────────────────────────────────────────────
 
   const openSubs = subtasks.filter((s) => s.status !== "done" && s.status !== "cancelled");
-  const doneSubs = subtasks.filter((s) => s.status === "done");
-  const visibleSubs = showCompleted ? subtasks : openSubs;
+  // Completed today: resolved highlight exists (completedTodayHighlight fires) — shown by default
+  const doneTodaySubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s) !== null);
+  // Completed on a previous day: hidden by default, revealed by toggle
+  const doneOlderSubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s) === null);
+
+  // Default view: pending + today's completed. Expanded view: also adds older completed.
+  const visibleSubs = showCompleted
+    ? [...openSubs, ...doneTodaySubs, ...doneOlderSubs]
+    : [...openSubs, ...doneTodaySubs];
 
   async function toggleSubStatus(sub: Task) {
     const next = sub.status === "done" ? "pending" : "done";
@@ -599,7 +606,7 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
         <div className="section-header" style={{ margin: 0 }}>
           <span>↳</span> Subtasks ({openSubs.length})
         </div>
-        {doneSubs.length > 0 && (
+        {doneOlderSubs.length > 0 && (
           <button onClick={() => setShowCompleted((v) => !v)} style={{
             display: "inline-flex", alignItems: "center", gap: 5,
             padding: "3px 10px", borderRadius: "var(--radius-full)",
@@ -609,7 +616,10 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
             fontSize: "0.7rem", fontWeight: 500, cursor: "pointer",
             transition: "all var(--transition-fast)",
           }}>
-            {showCompleted ? (<><svg width="9" height="9" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>Hide completed</>) : <>{doneSubs.length} completed</>}
+            {showCompleted
+              ? <><svg width="9" height="9" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>Hide completed</>
+              : <>{doneOlderSubs.length} completed</>
+            }
           </button>
         )}
       </div>
