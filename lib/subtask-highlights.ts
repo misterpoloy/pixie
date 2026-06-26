@@ -14,6 +14,7 @@ export interface SubtaskHighlight {
 
 interface SubtaskLike {
   createdAt?: string;
+  completedAt?: string | null;
   status: string;
 }
 
@@ -41,13 +42,32 @@ const createdTodayHighlight: HighlightResolver = (sub) => {
   };
 };
 
+// Resolver: completed today → accent blue (dimmed, shown with strikethrough)
+const completedTodayHighlight: HighlightResolver = (sub) => {
+  if (sub.status !== "done") return null;
+  if (!sub.completedAt) return null;
+  const completed = new Date(sub.completedAt);
+  const completedLocal = `${completed.getFullYear()}-${String(completed.getMonth() + 1).padStart(2, "0")}-${String(completed.getDate()).padStart(2, "0")}`;
+  if (completedLocal !== localDateStr()) return null;
+  return {
+    textColor: "var(--accent-hover)",
+    badgeColor: "var(--accent)",
+    badgeBg: "rgba(124,110,247,0.10)",
+    badgeBorder: "rgba(124,110,247,0.25)",
+    rowBg: "rgba(124,110,247,0.05)",
+    checkBorderColor: "var(--accent)",
+    badgeLabel: "done",
+  };
+};
+
 // Registry — push new resolvers here as filters are introduced
 export const HIGHLIGHT_RESOLVERS: HighlightResolver[] = [
   createdTodayHighlight,
+  completedTodayHighlight,
 ];
 
 export function resolveHighlight(sub: SubtaskLike): SubtaskHighlight | null {
-  if (sub.status === "done" || sub.status === "cancelled") return null;
+  // Allow done items through — completedTodayHighlight handles them
   for (const resolve of HIGHLIGHT_RESOLVERS) {
     const h = resolve(sub);
     if (h) return h;

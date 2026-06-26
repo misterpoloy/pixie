@@ -15,6 +15,7 @@ interface Task {
   isUpcoming?: boolean;
   hideOverdue?: boolean;
   createdAt?: string;
+  completedAt?: string | null;
   subtasks?: Task[];
 }
 
@@ -69,8 +70,13 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
 
   const doneCount = subtasks.filter((s) => s.status === "done").length;
   const progress = doneCount / subtasks.length;
-  const visible = subtasks.slice(0, MAX_VISIBLE);
-  const overflow = subtasks.length - MAX_VISIBLE;
+
+  // Always show pending + done-today; hide other done items
+  const showable = subtasks.filter(
+    (s) => s.status !== "done" || resolveHighlight(s) !== null
+  );
+  const visible = showable.slice(0, MAX_VISIBLE);
+  const overflow = showable.length - MAX_VISIBLE;
 
   return (
     <div className="task-card-subtasks">

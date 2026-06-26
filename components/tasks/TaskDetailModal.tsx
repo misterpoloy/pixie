@@ -30,6 +30,7 @@ interface Task {
   listId?: string | null;
   coverImage?: string | null;
   createdAt?: string;
+  completedAt?: string | null;
   updatedAt?: string;
   updatedBy?: string | null;
 }
