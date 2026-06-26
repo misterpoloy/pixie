@@ -3,6 +3,7 @@ import "./globals.css";
 import { TopBar } from "@/components/layout/TopBar";
 import { LayoutProvider } from "@/components/layout/LayoutContext";
 import MobileNav from "@/components/layout/MobileNav";
+import { ToastProvider } from "@/components/ui/ToastContext";
 
 export const metadata: Metadata = {
   title: "Pixie — Smart Tasks",
@@ -15,9 +16,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <LayoutProvider>
-          <TopBar />
-          <div className="pt-11">{children}</div>
-          <MobileNav />
+          <ToastProvider>
+            <TopBar />
+            <div className="pt-11">{children}</div>
+            <MobileNav />
+          </ToastProvider>
         </LayoutProvider>
       </body>
     </html>

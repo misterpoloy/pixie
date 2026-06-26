@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useToast } from "@/components/ui/ToastContext";
 
 interface ParentTask {
   id: string;
@@ -21,6 +22,7 @@ export default function SubtaskMovePicker({ subtaskId, currentParentId, onMoved,
   const [moving, setMoving] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetch("/api/tasks?parentId=null")
@@ -43,15 +45,24 @@ export default function SubtaskMovePicker({ subtaskId, currentParentId, onMoved,
   }, [onClose]);
 
   async function moveTo(targetId: string) {
+    const target = tasks.find((t) => t.id === targetId);
     setMoving(true);
-    await fetch(`/api/tasks/${subtaskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ parentId: targetId }),
-    });
-    setMoving(false);
-    onMoved();
-    onClose();
+    try {
+      const res = await fetch(`/api/tasks/${subtaskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentId: targetId }),
+      });
+      const d = await res.json();
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "Move failed");
+      toast(`Moved to "${target?.title ?? "task"}"`, { variant: "success" });
+      onMoved();
+      onClose();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Could not move subtask", { variant: "error" });
+    } finally {
+      setMoving(false);
+    }
   }
 
   const filtered = tasks.filter((t) =>
