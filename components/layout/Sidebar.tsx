@@ -150,6 +150,25 @@ export default function Sidebar() {
           <span className="tracking-tight">Sign out</span>
         </button>
       </div>
+
+      {/* Version badge */}
+      <div className="px-3 pt-3 pb-1">
+        <span style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          fontSize: "0.65rem", fontWeight: 500, letterSpacing: "0.04em",
+          color: "var(--text-muted)", opacity: 0.5,
+          fontFamily: "monospace",
+        }}>
+          <span style={{
+            width: 5, height: 5, borderRadius: "50%",
+            background: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ? "#30d158" : "#636366",
+            flexShrink: 0,
+          }} />
+          {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA
+            ? process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.slice(0, 7)
+            : "dev"}
+        </span>
+      </div>
     </aside>
   );
 
