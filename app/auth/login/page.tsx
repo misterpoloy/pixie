@@ -40,8 +40,26 @@ function LoginForm() {
     window.location.href = callbackUrl;
   }
 
+  const sha = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA;
+
   return (
     <div className="auth-shell">
+      {/* Version badge — bottom-right, always visible without auth */}
+      <div style={{
+        position: "fixed", bottom: 14, right: 16,
+        display: "flex", alignItems: "center", gap: 5,
+        fontSize: "0.65rem", fontWeight: 500, letterSpacing: "0.04em",
+        color: "var(--text-muted)", opacity: 0.5,
+        fontFamily: "monospace", pointerEvents: "none",
+      }}>
+        <span style={{
+          width: 5, height: 5, borderRadius: "50%",
+          background: sha ? "#30d158" : "#636366",
+          flexShrink: 0,
+        }} />
+        {sha ? sha.slice(0, 7) : "dev"}
+      </div>
+
       <div className="auth-card slide-up">
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{
