@@ -131,6 +131,28 @@ function SubtaskStrip({ subtasks, onSubtaskToggle, referenceDate }: SubtaskStrip
               >
                 {sub.title}
               </span>
+              {sub.labels && sub.labels.length > 0 && (
+                <span style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                  {sub.labels.map((lbl) => (
+                    <span
+                      key={lbl.labelId}
+                      title={lbl.name}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 2,
+                        padding: "1px 5px", borderRadius: 20,
+                        fontSize: "0.58rem", fontWeight: 600,
+                        background: `${lbl.color}22`,
+                        border: `1px solid ${lbl.color}55`,
+                        color: lbl.color,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <span style={{ width: 4, height: 4, borderRadius: "50%", background: lbl.color, flexShrink: 0 }} />
+                      {lbl.name}
+                    </span>
+                  ))}
+                </span>
+              )}
               {age !== null && (
                 <span
                   className="task-card-subtask-age"
