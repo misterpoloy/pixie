@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { db, tasks, taskLabels } from "@/lib/db";
+import { db, tasks, taskLabels, labels } from "@/lib/db";
 import { resolveUserId } from "@/lib/auth-helpers";
 import { updateTaskSchema } from "@/lib/validators";
 import { ok, err, unauthorized, notFound } from "@/lib/api-response";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, asc } from "drizzle-orm";
 
 async function getTask(id: string, userId: string) {
   const [task] = await db
@@ -22,12 +22,35 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const task = await getTask(id, userId);
   if (!task) return notFound("Task");
 
-  const [subtasks, labels] = await Promise.all([
-    db.select().from(tasks).where(and(eq(tasks.parentId, id), eq(tasks.userId, userId))),
-    db.select().from(taskLabels).where(eq(taskLabels.taskId, id)),
+  const subtaskRows = await db.select().from(tasks)
+    .where(and(eq(tasks.parentId, id), eq(tasks.userId, userId)))
+    .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
+
+  const subtaskIds = subtaskRows.map((s) => s.id);
+
+  const [taskLabelRows, subtaskLabelRows] = await Promise.all([
+    db.select({ taskId: taskLabels.taskId, labelId: taskLabels.labelId, name: labels.name, color: labels.color })
+      .from(taskLabels)
+      .innerJoin(labels, eq(taskLabels.labelId, labels.id))
+      .where(eq(taskLabels.taskId, id)),
+    subtaskIds.length
+      ? db.select({ taskId: taskLabels.taskId, labelId: taskLabels.labelId, name: labels.name, color: labels.color })
+          .from(taskLabels)
+          .innerJoin(labels, eq(taskLabels.labelId, labels.id))
+          .where(inArray(taskLabels.taskId, subtaskIds))
+      : Promise.resolve([] as { taskId: string; labelId: string; name: string; color: string }[]),
   ]);
 
-  return ok({ ...task, subtasks, labels });
+  // Group subtask labels by taskId
+  const labelsBySubtask: Record<string, typeof subtaskLabelRows> = {};
+  for (const row of subtaskLabelRows) {
+    if (!labelsBySubtask[row.taskId]) labelsBySubtask[row.taskId] = [];
+    labelsBySubtask[row.taskId].push(row);
+  }
+
+  const subtasks = subtaskRows.map((s) => ({ ...s, labels: labelsBySubtask[s.id] ?? [] }));
+
+  return ok({ ...task, subtasks, labels: taskLabelRows });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

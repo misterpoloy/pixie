@@ -1,6 +1,13 @@
 "use client";
 
 import { formatDate, isToday, isTomorrow } from "@/lib/date-helpers";
+import { resolveHighlight } from "@/lib/subtask-highlights";
+
+interface TaskLabel {
+  labelId: string;
+  name: string;
+  color: string;
+}
 
 interface Task {
   id: string;
@@ -13,12 +20,16 @@ interface Task {
   isSomeday?: boolean;
   isUpcoming?: boolean;
   hideOverdue?: boolean;
+  createdAt?: string;
+  completedAt?: string | null;
   subtasks?: Task[];
+  labels?: TaskLabel[];
 }
 
 interface Props {
   task: Task;
   onOpen: (task: Task) => void;
+  referenceDate?: string; // YYYY-MM-DD for highlight system; defaults to today
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -45,24 +56,36 @@ function dueDateLabel(
   return { text: formatDate(date), color: "var(--text-muted)" };
 }
 
+function ageDays(createdAt?: string): number | null {
+  if (!createdAt) return null;
+  return Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
+}
+
+
 // ── SubtaskStrip ──────────────────────────────────────────────────────────────
 // Shows up to MAX_VISIBLE subtask rows + a thin progress bar.
 // Designed as a standalone composable section so it can be reused elsewhere.
 
-const MAX_VISIBLE = 3;
+const MAX_VISIBLE = 10;
 
 interface SubtaskStripProps {
   subtasks: Task[];
   onSubtaskToggle?: (id: string, done: boolean) => void;
+  referenceDate?: string;
 }
 
-function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
+function SubtaskStrip({ subtasks, onSubtaskToggle, referenceDate }: SubtaskStripProps) {
   if (!subtasks.length) return null;
 
   const doneCount = subtasks.filter((s) => s.status === "done").length;
   const progress = doneCount / subtasks.length;
-  const visible = subtasks.slice(0, MAX_VISIBLE);
-  const overflow = subtasks.length - MAX_VISIBLE;
+
+  // Pending first, then done-on-referenceDate last; hide older completed
+  const pending = subtasks.filter((s) => s.status !== "done" && s.status !== "cancelled");
+  const doneToday = subtasks.filter((s) => s.status === "done" && resolveHighlight(s, referenceDate) !== null);
+  const showable = [...pending, ...doneToday];
+  const visible = showable.slice(0, MAX_VISIBLE);
+  const overflow = showable.length - MAX_VISIBLE;
 
   return (
     <div className="task-card-subtasks">
@@ -78,16 +101,19 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
       <div className="task-card-subtasks-list">
         {visible.map((sub) => {
           const done = sub.status === "done";
+          const hl = resolveHighlight(sub, referenceDate);
+          const age = !done ? ageDays(sub.createdAt) : null;
           return (
             <div
               key={sub.id}
               className="task-card-subtask-row"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSubtaskToggle?.(sub.id, !done);
-              }}
+              onClick={(e) => { e.stopPropagation(); onSubtaskToggle?.(sub.id, !done); }}
+              style={hl ? { background: hl.rowBg, borderRadius: 5 } : undefined}
             >
-              <span className={`task-card-subtask-check${done ? " done" : ""}`}>
+              <span
+                className={`task-card-subtask-check${done ? " done" : ""}`}
+                style={hl ? { borderColor: hl.checkBorderColor } : undefined}
+              >
                 {done && (
                   <svg width="7" height="6" viewBox="0 0 7 6" fill="none">
                     <path d="M1 3L2.8 4.8L6 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -98,11 +124,25 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
                 className="task-card-subtask-title"
                 style={{
                   textDecoration: done ? "line-through" : "none",
-                  color: done ? "var(--text-muted)" : "var(--text-secondary)",
+                  color: done ? "var(--text-muted)" : hl ? hl.textColor : "var(--text-secondary)",
+                  flex: 1,
+                  fontWeight: hl ? 500 : 400,
                 }}
               >
                 {sub.title}
               </span>
+              {age !== null && (
+                <span
+                  className="task-card-subtask-age"
+                  style={hl ? {
+                    color: hl.badgeColor,
+                    background: hl.badgeBg,
+                    borderColor: hl.badgeBorder,
+                  } : undefined}
+                >
+                  {hl?.badgeLabel ?? (age === 0 ? "new" : `${age}d`)}
+                </span>
+              )}
             </div>
           );
         })}
@@ -117,7 +157,7 @@ function SubtaskStrip({ subtasks, onSubtaskToggle }: SubtaskStripProps) {
 
 // ── TaskCard ──────────────────────────────────────────────────────────────────
 
-export default function TaskCard({ task, onOpen }: Props) {
+export default function TaskCard({ task, onOpen, referenceDate }: Props) {
   const isDone = task.status === "done";
   const dateInfo = dueDateLabel(task.dueDate, task.hideOverdue);
   const hasCover = !!task.coverImage;
@@ -212,12 +252,32 @@ export default function TaskCard({ task, onOpen }: Props) {
               <span style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>notes</span>
             </div>
           )}
+          {task.labels && task.labels.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+              {task.labels.map((lbl) => (
+                <span
+                  key={lbl.labelId}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 3,
+                    padding: "2px 7px", borderRadius: 20,
+                    fontSize: "0.62rem", fontWeight: 500, letterSpacing: "0.02em",
+                    background: `${lbl.color}22`,
+                    border: `1px solid ${lbl.color}55`,
+                    color: lbl.color,
+                  }}
+                >
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: lbl.color, flexShrink: 0 }} />
+                  {lbl.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Subtask strip — only rendered when subtasks exist */}
       {subtasks.length > 0 && (
-        <SubtaskStrip subtasks={subtasks} onSubtaskToggle={handleSubtaskToggle} />
+        <SubtaskStrip subtasks={subtasks} onSubtaskToggle={handleSubtaskToggle} referenceDate={referenceDate} />
       )}
     </div>
   );

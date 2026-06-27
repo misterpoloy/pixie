@@ -5,6 +5,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
 import AddTaskInline from "./AddTaskInline";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import SubtaskTagPicker from "./SubtaskTagPicker";
+import SubtaskMovePicker from "./SubtaskMovePicker";
+import { resolveHighlight } from "@/lib/subtask-highlights";
+
+interface TaskLabel {
+  labelId: string;
+  name: string;
+  color: string;
+}
 
 interface Task {
   id: string;
@@ -18,9 +27,11 @@ interface Task {
   isUpcoming?: boolean;
   hideOverdue?: boolean;
   subtasks?: Task[];
+  labels?: TaskLabel[];
   listId?: string | null;
   coverImage?: string | null;
   createdAt?: string;
+  completedAt?: string | null;
   updatedAt?: string;
   updatedBy?: string | null;
 }
@@ -35,6 +46,7 @@ interface Comment {
 interface Props {
   task: Task;
   onClose: () => void;
+  referenceDate?: string; // YYYY-MM-DD for highlight system
 }
 
 // ── Chip style maps ────────────────────────────────────────────────────────────
@@ -345,7 +357,7 @@ function MetaRow({ icon, label, value, valueColor, title }: { icon: string; labe
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function TaskDetailModal({ task: initial, onClose }: Props) {
+export default function TaskDetailModal({ task: initial, onClose, referenceDate }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -359,6 +371,8 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
   const [showCompleted, setShowCompleted] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedSub, setSelectedSub] = useState<Task | null>(null);
+  const [tagPickerSubId, setTagPickerSubId] = useState<string | null>(null);
+  const [movePickerSubId, setMovePickerSubId] = useState<string | null>(null);
 
   // Load full task data
   useEffect(() => {
@@ -567,8 +581,15 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
   // ── Subtasks ──────────────────────────────────────────────────────────────────
 
   const openSubs = subtasks.filter((s) => s.status !== "done" && s.status !== "cancelled");
-  const doneSubs = subtasks.filter((s) => s.status === "done");
-  const visibleSubs = showCompleted ? subtasks : openSubs;
+  // Completed today: resolved highlight exists (completedTodayHighlight fires) — shown by default
+  const doneTodaySubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s, referenceDate) !== null);
+  // Completed on a day other than referenceDate: hidden by default, revealed by toggle
+  const doneOlderSubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s, referenceDate) === null);
+
+  // Default view: pending + today's completed. Expanded view: also adds older completed.
+  const visibleSubs = showCompleted
+    ? [...openSubs, ...doneTodaySubs, ...doneOlderSubs]
+    : [...openSubs, ...doneTodaySubs];
 
   async function toggleSubStatus(sub: Task) {
     const next = sub.status === "done" ? "pending" : "done";
@@ -586,7 +607,7 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
         <div className="section-header" style={{ margin: 0 }}>
           <span>↳</span> Subtasks ({openSubs.length})
         </div>
-        {doneSubs.length > 0 && (
+        {doneOlderSubs.length > 0 && (
           <button onClick={() => setShowCompleted((v) => !v)} style={{
             display: "inline-flex", alignItems: "center", gap: 5,
             padding: "3px 10px", borderRadius: "var(--radius-full)",
@@ -596,7 +617,10 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
             fontSize: "0.7rem", fontWeight: 500, cursor: "pointer",
             transition: "all var(--transition-fast)",
           }}>
-            {showCompleted ? (<><svg width="9" height="9" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>Hide completed</>) : <>{doneSubs.length} completed</>}
+            {showCompleted
+              ? <><svg width="9" height="9" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>Hide completed</>
+              : <>{doneOlderSubs.length} completed</>
+            }
           </button>
         )}
       </div>
@@ -605,38 +629,143 @@ export default function TaskDetailModal({ task: initial, onClose }: Props) {
         {visibleSubs.map((sub) => {
           const done = sub.status === "done";
           const isSelected = selectedSub?.id === sub.id;
+          const subLabels = sub.labels ?? [];
+          const pickerOpen = tagPickerSubId === sub.id;
+          const movePickerOpen = movePickerSubId === sub.id;
           return (
-            <div key={sub.id} style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "7px 0", borderBottom: "1px solid var(--glass-border)",
-              opacity: done ? 0.6 : 1,
-              background: isSelected ? "rgba(124,110,247,0.06)" : "transparent",
-              transition: "all var(--transition-fast)",
-              borderRadius: isSelected ? 6 : 0,
-            }}>
-              {/* Checkbox — toggles status */}
-              <button className={`task-check ${done ? "done" : ""}`} style={{ width: 17, height: 17, minWidth: 17, flexShrink: 0 }} onClick={() => toggleSubStatus(sub)}>
-                {done && <svg width="8" height="6" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-              </button>
+            <div key={sub.id} style={{ position: "relative" }}>
+              {(() => {
+                const hl = resolveHighlight(sub, referenceDate);
+                return (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "7px 4px", borderBottom: "1px solid var(--glass-border)",
+                opacity: done ? 0.6 : 1,
+                background: isSelected ? "rgba(124,110,247,0.06)" : hl ? hl.rowBg : "transparent",
+                transition: "all var(--transition-fast)",
+                borderRadius: isSelected || hl ? 6 : 0,
+              }}>
+                {/* Checkbox */}
+                <button
+                  className={`task-check ${done ? "done" : ""}`}
+                  style={{ width: 17, height: 17, minWidth: 17, flexShrink: 0, ...(hl && !done ? { borderColor: hl.checkBorderColor } : {}) }}
+                  onClick={() => toggleSubStatus(sub)}
+                >
+                  {done && <svg width="8" height="6" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                </button>
 
-              {/* Title — clicking opens detail panel */}
-              <span
-                onClick={() => isSelected ? closeSub() : openSub(sub)}
-                style={{
-                  flex: 1, fontSize: "0.875rem",
-                  color: done ? "var(--text-muted)" : isSelected ? "var(--accent-hover)" : "var(--text-primary)",
-                  textDecoration: done ? "line-through" : "none",
-                  cursor: "pointer",
-                  transition: "color var(--transition-fast)",
-                }}
-              >
-                {sub.title}
-              </span>
+                {/* Title */}
+                <span
+                  onClick={() => isSelected ? closeSub() : openSub(sub)}
+                  style={{
+                    flex: 1, fontSize: "0.875rem",
+                    color: done ? "var(--text-muted)" : isSelected ? "var(--accent-hover)" : hl ? hl.textColor : "var(--text-primary)",
+                    fontWeight: hl && !done ? 500 : 400,
+                    textDecoration: done ? "line-through" : "none",
+                    cursor: "pointer", transition: "color var(--transition-fast)",
+                  }}
+                >
+                  {sub.title}
+                </span>
 
-              {/* Open panel indicator */}
-              <span style={{ fontSize: "0.65rem", color: isSelected ? "var(--accent)" : "var(--text-muted)", opacity: isSelected ? 1 : 0, transition: "opacity var(--transition-fast)", paddingRight: 4 }}>
-                ›
-              </span>
+                {/* Label pills */}
+                {subLabels.map((lbl) => (
+                  <span key={lbl.labelId} style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "2px 7px", borderRadius: "var(--radius-full)",
+                    fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.02em",
+                    background: `${lbl.color}22`,
+                    border: `1px solid ${lbl.color}55`,
+                    color: lbl.color,
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: lbl.color, display: "inline-block" }} />
+                    {lbl.name}
+                  </span>
+                ))}
+
+                {/* Add tag button */}
+                {!done && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setTagPickerSubId(pickerOpen ? null : sub.id); setMovePickerSubId(null); }}
+                    title="Add tag"
+                    style={{
+                      width: 20, height: 20, borderRadius: 4, border: "1px dashed var(--glass-border)",
+                      background: "transparent", color: "var(--text-muted)", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "0.75rem", flexShrink: 0, lineHeight: 1,
+                      transition: "all var(--transition-fast)",
+                    }}
+                  >
+                    #
+                  </button>
+                )}
+
+                {/* Move to button */}
+                {!done && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMovePickerSubId(movePickerOpen ? null : sub.id); setTagPickerSubId(null); }}
+                    title="Move to another task"
+                    style={{
+                      width: 20, height: 20, borderRadius: 4, border: "1px dashed var(--glass-border)",
+                      background: movePickerOpen ? "var(--accent-dim)" : "transparent",
+                      color: movePickerOpen ? "var(--accent-hover)" : "var(--text-muted)",
+                      cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0,
+                      transition: "all var(--transition-fast)",
+                    }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                )}
+
+                  {/* "new" highlight badge */}
+                {hl?.badgeLabel && (
+                  <span style={{
+                    fontSize: "0.6rem", fontWeight: 700, padding: "2px 6px",
+                    borderRadius: "var(--radius-full)", flexShrink: 0,
+                    color: hl.badgeColor, background: hl.badgeBg, border: `1px solid ${hl.badgeBorder}`,
+                  }}>
+                    {hl.badgeLabel}
+                  </span>
+                )}
+
+                {/* Open panel indicator */}
+                <span style={{ fontSize: "0.65rem", color: isSelected ? "var(--accent)" : "var(--text-muted)", opacity: isSelected ? 1 : 0, transition: "opacity var(--transition-fast)", paddingRight: 4 }}>
+                  ›
+                </span>
+              </div>
+              ); })()}
+
+              {/* Tag picker popover */}
+              {pickerOpen && (
+                <SubtaskTagPicker
+                  taskId={sub.id}
+                  current={subLabels.map((l) => ({ id: l.labelId, name: l.name, color: l.color }))}
+                  onUpdate={(updated) => {
+                    setSubtasks((prev) => prev.map((s) =>
+                      s.id === sub.id
+                        ? { ...s, labels: updated.map((u) => ({ labelId: u.id, name: u.name, color: u.color })) }
+                        : s
+                    ));
+                  }}
+                  onClose={() => setTagPickerSubId(null)}
+                />
+              )}
+
+              {/* Move picker popover */}
+              {movePickerOpen && (
+                <SubtaskMovePicker
+                  subtaskId={sub.id}
+                  currentParentId={task.id}
+                  onMoved={refreshSubtasks}
+                  onClose={() => setMovePickerSubId(null)}
+                />
+              )}
             </div>
           );
         })}

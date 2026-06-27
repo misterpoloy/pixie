@@ -10,6 +10,7 @@ import NavRail from "@/components/layout/NavRail";
 import MiniCalendar from "@/components/widgets/MiniCalendar";
 import WorldClock from "@/components/widgets/WorldClock";
 import ViewToggle, { type ViewMode } from "@/components/ui/ViewToggle";
+import Bitacora from "@/components/bitacora/Bitacora";
 
 interface Task {
   id: string;
@@ -22,6 +23,7 @@ interface Task {
   isSomeday?: boolean;
   isUpcoming?: boolean;
   createdAt?: string;
+  completedAt?: string | null;
   parentId?: string | null;
   subtasks?: Task[];
 }
@@ -40,14 +42,37 @@ function nestTasks(flat: Task[]): Task[] {
   return roots;
 }
 
+// Derive a human-readable header label + subtitle from a YYYY-MM-DD date
+function deriveDateLabel(dateYMD: string, todayYMD: string): { heading: string; subtitle: string } {
+  const d = new Date(`${dateYMD}T12:00:00`); // noon avoids DST edge
+  const heading = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
-export default function TodayView({ dateStr }: { dateStr: string }) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const diff = Math.round(
+    (new Date(`${dateYMD}T12:00:00`).getTime() - new Date(`${todayYMD}T12:00:00`).getTime()) / 86_400_000
+  );
+
+  let subtitle = "Today";
+  if (diff === -1) subtitle = "Yesterday";
+  else if (diff === 1) subtitle = "Tomorrow";
+  else if (diff < -1) subtitle = `${Math.abs(diff)} days ago`;
+  else if (diff > 1)  subtitle = `In ${diff} days`;
+
+  return { heading, subtitle };
+}
+
+export default function TodayView({ dateStr, localDate }: { dateStr: string; localDate: string }) {
+  const [tasks, setTasks]       = useState<Task[]>([]);
+  const [loading, setLoading]   = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [showClock, setShowClock] = useState(false);
+  const [showClock, setShowClock]       = useState(false);
+
+  // The currently selected calendar date — drives task fetch, highlights, bitacora
+  const [selectedDate, setSelectedDate] = useState(localDate);
+
+  const { heading, subtitle } = deriveDateLabel(selectedDate, localDate);
+  const isToday = selectedDate === localDate;
 
   // Persist view preference
   useEffect(() => {
@@ -62,22 +87,23 @@ export default function TodayView({ dateStr }: { dateStr: string }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/tasks?view=today");
+    // Always use ?date= so the API handles today vs past correctly
+    const res = await fetch(`/api/tasks?date=${selectedDate}`);
     const data = await res.json();
     if (data.ok) setTasks(nestTasks(data.data));
     setLoading(false);
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     load();
-    // Snapshot today's open tasks for historical carry-forward tracking.
-    // Fire-and-forget — never blocks the UI. Idempotent via ON CONFLICT DO NOTHING.
-    const localDate = new Date().toISOString().slice(0, 10);
-    fetch("/api/snapshot", {
-      method: "POST",
-      headers: { "x-local-date": localDate },
-    }).catch(() => {});
-  }, [load]);
+    // Snapshot only on "today" view
+    if (isToday) {
+      fetch("/api/snapshot", {
+        method: "POST",
+        headers: { "x-local-date": localDate },
+      }).catch(() => {});
+    }
+  }, [load, isToday, localDate]);
 
   function handleToggle(id: string, done: boolean) {
     setTasks((prev) =>
@@ -85,36 +111,48 @@ export default function TodayView({ dateStr }: { dateStr: string }) {
     );
   }
 
+  void handleToggle; // used only in list view via TaskItem
+
   const pending = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled" && !t.isSomeday && !t.isUpcoming);
-  const done = tasks.filter((t) => t.status === "done" && !t.isSomeday && !t.isUpcoming);
+  const done    = tasks.filter((t) => t.status === "done"  && !t.isSomeday && !t.isUpcoming);
+
+  function handleSelectDate(date: string) {
+    setSelectedDate(date);
+    // Auto-open calendar panel if not already open
+    if (!showCalendar) setShowCalendar(true);
+  }
 
   return (
     <>
       {/* Page header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28 }}>
         <div>
-          <h1 className="page-title" style={{ marginBottom: 4 }}>{dateStr}</h1>
-          <p style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600, color: "var(--accent-hover)", letterSpacing: "-0.01em" }}>Today</p>
+          <h1 className="page-title" style={{ marginBottom: 4 }}>{heading}</h1>
+          <p style={{
+            margin: 0, fontSize: "1.1rem", fontWeight: 600,
+            color: isToday ? "var(--accent-hover)" : "var(--text-secondary)",
+            letterSpacing: "-0.01em",
+          }}>
+            {subtitle}
+          </p>
         </div>
         <ViewToggle mode={viewMode} onChange={changeView} />
       </div>
 
       {loading && (
-        <div style={{ color: "var(--text-muted)", fontSize: "0.875rem", padding: "12px 0" }}>
-          Loading…
-        </div>
+        <div style={{ color: "var(--text-muted)", fontSize: "0.875rem", padding: "12px 0" }}>Loading…</div>
       )}
 
       {!loading && pending.length === 0 && done.length === 0 && (
         <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-muted)", fontSize: "0.9rem" }}>
-          Nothing due today — enjoy your day ✨
+          {isToday ? "Nothing due today — enjoy your day ✨" : "No tasks found for this date."}
         </div>
       )}
 
-      {/* ── Card view ────────────────────────────────────────── */}
+      {/* ── Card view ─────────────────────────────────────────── */}
       {viewMode === "card" && !loading && (
         <>
-          <DraggableCardGrid tasks={pending} onOpen={setOpenTask} />
+          <DraggableCardGrid tasks={pending} onOpen={setOpenTask} referenceDate={selectedDate} />
 
           {done.length > 0 && (
             <details style={{ marginTop: 28 }}>
@@ -122,32 +160,31 @@ export default function TodayView({ dateStr }: { dateStr: string }) {
                 <span>✓</span> Completed ({done.length})
               </summary>
               <div style={{ marginTop: 12, opacity: 0.5 }}>
-                <DraggableCardGrid tasks={done} onOpen={setOpenTask} />
+                <DraggableCardGrid tasks={done} onOpen={setOpenTask} referenceDate={selectedDate} />
               </div>
             </details>
           )}
 
-          <div style={{ marginTop: 20 }}>
-            <AddTaskInline defaults={{ dueDate: new Date().toISOString() }} onCreated={load} />
-          </div>
+          {isToday && (
+            <div style={{ marginTop: 20 }}>
+              <AddTaskInline defaults={{ dueDate: new Date().toISOString() }} onCreated={load} />
+            </div>
+          )}
         </>
       )}
 
-      {/* ── List view ────────────────────────────────────────── */}
+      {/* ── List view ─────────────────────────────────────────── */}
       {viewMode === "list" && !loading && (
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {pending.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onOpen={setOpenTask}
-                onRefresh={load}
-              />
+              <TaskItem key={task.id} task={task} onOpen={setOpenTask} onRefresh={load} />
             ))}
           </div>
 
-          <AddTaskInline defaults={{ dueDate: new Date().toISOString() }} onCreated={load} />
+          {isToday && (
+            <AddTaskInline defaults={{ dueDate: new Date().toISOString() }} onCreated={load} />
+          )}
 
           {done.length > 0 && (
             <details style={{ marginTop: 20 }}>
@@ -168,10 +205,14 @@ export default function TodayView({ dateStr }: { dateStr: string }) {
         <Suspense>
           <TaskDetailModal
             task={openTask}
+            referenceDate={selectedDate}
             onClose={() => { setOpenTask(null); load(); }}
           />
         </Suspense>
       )}
+
+      {/* ── Bitacora: filtered to selected date ───────────────── */}
+      <Bitacora dateStr={selectedDate} />
 
       <NavRail
         showCalendar={showCalendar}
@@ -182,7 +223,12 @@ export default function TodayView({ dateStr }: { dateStr: string }) {
 
       {(showCalendar || showClock) && (
         <RightBar>
-          {showCalendar && <MiniCalendar />}
+          {showCalendar && (
+            <MiniCalendar
+              selectedDate={selectedDate}
+              onSelect={(date) => setSelectedDate(date)}
+            />
+          )}
           {showClock && <WorldClock />}
         </RightBar>
       )}

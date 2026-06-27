@@ -5,19 +5,11 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import {
-  Sun,
-  Moon,
-  CalendarDays,
-  Hourglass,
-  Calendar,
-  Search,
-  FileText,
-  Settings,
-  LogOut,
-  Plus,
-  List,
+  Sun, Moon, CalendarDays, Hourglass, Calendar,
+  Search, FileText, Settings, LogOut, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLayout } from "@/components/layout/LayoutContext";
 
 interface List {
   id: string;
@@ -40,9 +32,35 @@ const BOTTOM_VIEWS = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+function NavLink({
+  href, label, icon: Icon, active, onClick,
+}: {
+  href: string; label: string; icon: React.ElementType; active: boolean; onClick?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={cn(
+        "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150",
+        active
+          ? "bg-[#7c6ef7]/10 text-[#9484fa]"
+          : "text-white/40 hover:text-white/80 hover:bg-white/[0.04]"
+      )}
+    >
+      {active && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-[#7c6ef7] rounded-r-full" />
+      )}
+      <Icon className={cn("w-[15px] h-[15px] flex-shrink-0", active ? "text-[#7c6ef7]" : "")} />
+      <span className="tracking-tight">{label}</span>
+    </Link>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const [lists, setLists] = useState<List[]>([]);
+  const { sidebarOpen, closeSidebar } = useLayout();
 
   useEffect(() => {
     fetch("/api/lists").then((r) => r.json()).then((d) => {
@@ -50,40 +68,35 @@ export default function Sidebar() {
     });
   }, []);
 
+  // On mobile: close drawer on route change
+  useEffect(() => {
+    if (window.innerWidth <= 768) closeSidebar();
+  }, [pathname, closeSidebar]);
+
+  // Lock body scroll only on mobile when drawer open
+  useEffect(() => {
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile && sidebarOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [sidebarOpen]);
+
   const isActive = (href: string) => pathname === href;
 
-  return (
-    <aside className="fixed left-0 top-11 bottom-0 w-[220px] z-40 flex flex-col bg-[#070a0f]/95 backdrop-blur-2xl border-r border-white/[0.06] py-3 px-2 overflow-y-auto">
-
-      {/* Smart views */}
+  const sidebarContent = (
+    <aside className={cn("sidebar", sidebarOpen ? "sidebar--open" : "sidebar--collapsed")}>
       <nav className="space-y-px">
-        {NAV_VIEWS.map(({ href, label, icon: Icon }) => {
-          const active = isActive(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150",
-                active
-                  ? "bg-[#7c6ef7]/10 text-[#9484fa]"
-                  : "text-white/40 hover:text-white/80 hover:bg-white/[0.04]"
-              )}
-            >
-              {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-[#7c6ef7] rounded-r-full" />
-              )}
-              <Icon className={cn("w-[15px] h-[15px] flex-shrink-0", active ? "text-[#7c6ef7]" : "")} />
-              <span className="tracking-tight">{label}</span>
-            </Link>
-          );
-        })}
+        {NAV_VIEWS.map(({ href, label, icon }) => (
+          <NavLink key={href} href={href} label={label} icon={icon}
+            active={isActive(href)} onClick={() => { if (window.innerWidth <= 768) closeSidebar(); }} />
+        ))}
       </nav>
 
-      {/* Divider */}
       <div className="my-4 border-t border-white/[0.05]" />
 
-      {/* Lists */}
       <div className="px-3 mb-1.5">
         <p className="text-[10px] font-semibold text-white/20 uppercase tracking-[0.12em]">Lists</p>
       </div>
@@ -95,6 +108,7 @@ export default function Sidebar() {
             <Link
               key={list.id}
               href={href}
+              onClick={closeSidebar}
               className={cn(
                 "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150",
                 active
@@ -105,10 +119,7 @@ export default function Sidebar() {
               {active && (
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-[#7c6ef7] rounded-r-full" />
               )}
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ background: list.color }}
-              />
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: list.color }} />
               <span className="truncate tracking-tight">{list.name}</span>
             </Link>
           );
@@ -116,6 +127,7 @@ export default function Sidebar() {
 
         <Link
           href="/list/new"
+          onClick={closeSidebar}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-[#7c6ef7]/60 hover:text-[#7c6ef7] hover:bg-[#7c6ef7]/[0.06] transition-all duration-150"
         >
           <Plus className="w-[15px] h-[15px] flex-shrink-0" />
@@ -123,33 +135,13 @@ export default function Sidebar() {
         </Link>
       </nav>
 
-      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Bottom nav */}
       <div className="border-t border-white/[0.05] pt-3 space-y-px">
-        {BOTTOM_VIEWS.map(({ href, label, icon: Icon }) => {
-          const active = isActive(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150",
-                active
-                  ? "bg-[#7c6ef7]/10 text-[#9484fa]"
-                  : "text-white/40 hover:text-white/80 hover:bg-white/[0.04]"
-              )}
-            >
-              {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-[#7c6ef7] rounded-r-full" />
-              )}
-              <Icon className={cn("w-[15px] h-[15px] flex-shrink-0", active ? "text-[#7c6ef7]" : "")} />
-              <span className="tracking-tight">{label}</span>
-            </Link>
-          );
-        })}
-
+        {BOTTOM_VIEWS.map(({ href, label, icon }) => (
+          <NavLink key={href} href={href} label={label} icon={icon}
+            active={isActive(href)} onClick={() => { if (window.innerWidth <= 768) closeSidebar(); }} />
+        ))}
         <button
           onClick={() => signOut({ callbackUrl: "/auth/login" })}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all duration-150"
@@ -159,5 +151,19 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      {sidebarContent}
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={closeSidebar}
+          aria-hidden="true"
+        />
+      )}
+    </>
   );
 }

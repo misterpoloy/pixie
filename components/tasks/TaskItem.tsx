@@ -4,7 +4,8 @@ import { useState } from "react";
 import { formatDate, formatElapsedDays, isToday, isTomorrow } from "@/lib/date-helpers";
 
 interface Label {
-  id: string;
+  id?: string;
+  labelId?: string;
   name: string;
   color: string;
 }
@@ -20,7 +21,7 @@ interface Task {
   hideOverdue?: boolean;
   createdAt?: string;
   subtasks?: Task[];
-  labels?: { labelId: string; label?: Label }[];
+  labels?: Label[];
   notes?: string | null;
 }
 
@@ -50,9 +51,16 @@ function dueDateLabel(
   return { text: formatDate(date), color: "var(--text-muted)" };
 }
 
+function isCreatedToday(createdAt?: string): boolean {
+  if (!createdAt) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return createdAt.slice(0, 10) === today;
+}
+
 export default function TaskItem({ task, depth = 0, metaMode = "default", onToggle, onOpen, onRefresh }: Props) {
   const [expanded, setExpanded] = useState(true);
   const isDone = task.status === "done";
+  const createdToday = !isDone && isCreatedToday(task.createdAt);
   const dateInfo = dueDateLabel(task.dueDate, task.hideOverdue);
   const metaText =
     metaMode === "upcoming" && task.isUpcoming && task.createdAt
@@ -73,7 +81,15 @@ export default function TaskItem({ task, depth = 0, metaMode = "default", onTogg
 
   return (
     <div>
-      <div className="task-item" style={{ paddingLeft: depth > 0 ? `${12 + depth * 16}px` : undefined }}>
+      <div
+        className="task-item"
+        style={{
+          paddingLeft: depth > 0 ? `${12 + depth * 16}px` : undefined,
+          borderLeft: createdToday ? "2px solid var(--accent)" : undefined,
+          background: createdToday ? "rgba(124,110,247,0.06)" : undefined,
+          borderRadius: createdToday ? "var(--radius-sm)" : undefined,
+        }}
+      >
         {/* Expand toggle for subtasks */}
         {hasSubtasks && (
           <button
@@ -123,6 +139,26 @@ export default function TaskItem({ task, depth = 0, metaMode = "default", onTogg
               {task.isSomeday && !metaText && (
                 <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Someday</span>
               )}
+            </div>
+          )}
+          {task.labels && task.labels.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
+              {task.labels.map((lbl) => (
+                <span
+                  key={lbl.labelId ?? lbl.id}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 3,
+                    padding: "2px 7px", borderRadius: 20,
+                    fontSize: "0.62rem", fontWeight: 500,
+                    background: `${lbl.color}22`,
+                    border: `1px solid ${lbl.color}55`,
+                    color: lbl.color,
+                  }}
+                >
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: lbl.color, flexShrink: 0 }} />
+                  {lbl.name}
+                </span>
+              ))}
             </div>
           )}
         </div>
