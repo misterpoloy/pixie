@@ -122,6 +122,12 @@ export default function TodayView({ dateStr, localDate }: { dateStr: string; loc
     if (!showCalendar) setShowCalendar(true);
   }
 
+  function shiftDay(delta: number) {
+    const d = new Date(`${selectedDate}T12:00:00`);
+    d.setDate(d.getDate() + delta);
+    setSelectedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
+
   return (
     <>
       {/* Page header */}
@@ -136,7 +142,70 @@ export default function TodayView({ dateStr, localDate }: { dateStr: string; loc
             {subtitle}
           </p>
         </div>
-        <ViewToggle mode={viewMode} onChange={changeView} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Day navigation */}
+          <div style={{
+            display: "flex", alignItems: "center",
+            background: "var(--bg-card)", borderRadius: "var(--radius-sm)",
+            border: "1px solid var(--glass-border)", overflow: "hidden",
+          }}>
+            <button
+              onClick={() => shiftDay(-1)}
+              aria-label="Previous day"
+              title="Previous day"
+              style={{
+                background: "none", border: "none", borderRight: "1px solid var(--glass-border)",
+                cursor: "pointer", color: "var(--text-muted)",
+                padding: "6px 10px", display: "flex", alignItems: "center", lineHeight: 1,
+                transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--glass-hover)"; b.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "none"; b.style.color = "var(--text-muted)"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M9 11L5 7L9 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            <button
+              onClick={() => setSelectedDate(localDate)}
+              aria-label="Go to today"
+              title="Go to today"
+              style={{
+                background: isToday ? "var(--accent-dim)" : "none",
+                border: "none", borderRight: "1px solid var(--glass-border)",
+                cursor: isToday ? "default" : "pointer",
+                color: isToday ? "var(--accent-hover)" : "var(--text-muted)",
+                padding: "6px 12px", fontSize: "0.75rem", fontWeight: 600,
+                letterSpacing: "0.02em", lineHeight: 1,
+                transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => { if (!isToday) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--glass-hover)"; b.style.color = "var(--text-primary)"; } }}
+              onMouseLeave={(e) => { if (!isToday) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "none"; b.style.color = "var(--text-muted)"; } }}
+            >
+              Today
+            </button>
+
+            <button
+              onClick={() => shiftDay(1)}
+              aria-label="Next day"
+              title="Next day"
+              style={{
+                background: "none", border: "none",
+                cursor: "pointer", color: "var(--text-muted)",
+                padding: "6px 10px", display: "flex", alignItems: "center", lineHeight: 1,
+                transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--glass-hover)"; b.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "none"; b.style.color = "var(--text-muted)"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M5 3L9 7L5 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+          <ViewToggle mode={viewMode} onChange={changeView} />
+        </div>
       </div>
 
       {loading && (
