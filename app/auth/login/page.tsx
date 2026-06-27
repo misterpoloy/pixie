@@ -48,9 +48,13 @@ function LoginForm() {
       <div style={{
         position: "fixed", bottom: 14, right: 16,
         display: "flex", alignItems: "center", gap: 5,
-        fontSize: "0.65rem", fontWeight: 500, letterSpacing: "0.04em",
-        color: "var(--text-muted)", opacity: 0.5,
-        fontFamily: "monospace", pointerEvents: "none",
+        fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.04em",
+        color: sha ? "#30d158" : "#888",
+        fontFamily: "monospace",
+        background: "rgba(0,0,0,0.45)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 6, padding: "3px 8px",
+        pointerEvents: "none",
       }}>
         <span style={{
           width: 5, height: 5, borderRadius: "50%",
