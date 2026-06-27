@@ -3,6 +3,12 @@
 import { formatDate, isToday, isTomorrow } from "@/lib/date-helpers";
 import { resolveHighlight } from "@/lib/subtask-highlights";
 
+interface TaskLabel {
+  labelId: string;
+  name: string;
+  color: string;
+}
+
 interface Task {
   id: string;
   title: string;
@@ -17,6 +23,7 @@ interface Task {
   createdAt?: string;
   completedAt?: string | null;
   subtasks?: Task[];
+  labels?: TaskLabel[];
 }
 
 interface Props {
@@ -243,6 +250,26 @@ export default function TaskCard({ task, onOpen, referenceDate }: Props) {
           {task.notes && (
             <div className="task-card-meta">
               <span style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>notes</span>
+            </div>
+          )}
+          {task.labels && task.labels.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+              {task.labels.map((lbl) => (
+                <span
+                  key={lbl.labelId}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 3,
+                    padding: "2px 7px", borderRadius: 20,
+                    fontSize: "0.62rem", fontWeight: 500, letterSpacing: "0.02em",
+                    background: `${lbl.color}22`,
+                    border: `1px solid ${lbl.color}55`,
+                    color: lbl.color,
+                  }}
+                >
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: lbl.color, flexShrink: 0 }} />
+                  {lbl.name}
+                </span>
+              ))}
             </div>
           )}
         </div>

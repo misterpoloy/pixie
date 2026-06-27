@@ -1,10 +1,28 @@
 import { NextRequest } from "next/server";
-import { db, tasks, taskLabels, taskDayEntries } from "@/lib/db";
+import { db, tasks, taskLabels, taskDayEntries, labels } from "@/lib/db";
 import { resolveUserId } from "@/lib/auth-helpers";
 import { createTaskSchema } from "@/lib/validators";
 import { ok, err, unauthorized } from "@/lib/api-response";
 import { eq, and, gte, lte, isNull, inArray, asc } from "drizzle-orm";
 import { startOfDay, endOfDay, addDays } from "@/lib/date-helpers";
+
+type TaskRow = Record<string, unknown>;
+
+async function withLabels(rows: TaskRow[]): Promise<TaskRow[]> {
+  if (!rows.length) return rows;
+  const ids = rows.map((r) => r.id as string);
+  const labelRows = await db
+    .select({ taskId: taskLabels.taskId, labelId: taskLabels.labelId, name: labels.name, color: labels.color })
+    .from(taskLabels)
+    .innerJoin(labels, eq(taskLabels.labelId, labels.id))
+    .where(inArray(taskLabels.taskId, ids));
+  const byTask: Record<string, typeof labelRows> = {};
+  for (const row of labelRows) {
+    if (!byTask[row.taskId]) byTask[row.taskId] = [];
+    byTask[row.taskId].push(row);
+  }
+  return rows.map((r) => ({ ...r, labels: byTask[r.id as string] ?? [] }));
+}
 
 export async function GET(req: NextRequest) {
   const userId = await resolveUserId(req);
@@ -43,7 +61,7 @@ export async function GET(req: NextRequest) {
       const childRows = await db.select().from(tasks)
         .where(and(eq(tasks.userId, userId), inArray(tasks.parentId, parentIds)))
         .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
-      return ok([...parentRows, ...childRows]);
+      return ok(await withLabels([...parentRows, ...childRows] as TaskRow[]));
     }
 
     // Past date: look up snapshot — tasks that were open that day
@@ -79,7 +97,7 @@ export async function GET(req: NextRequest) {
       .where(and(eq(tasks.userId, userId), inArray(tasks.parentId, allParentIds)))
       .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
 
-    return ok([...parentRows, ...childRows]);
+    return ok(await withLabels([...parentRows, ...childRows] as TaskRow[]));
   }
 
   if (view === "today") {
@@ -102,7 +120,7 @@ export async function GET(req: NextRequest) {
       .where(and(eq(tasks.userId, userId), inArray(tasks.parentId, parentIds)))
       .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
 
-    return ok([...parentRows, ...childRows]);
+    return ok(await withLabels([...parentRows, ...childRows] as TaskRow[]));
   } else if (view === "tomorrow") {
     const tom = addDays(new Date(), 1);
     conditions.push(gte(tasks.dueDate, startOfDay(tom)));
@@ -119,7 +137,7 @@ export async function GET(req: NextRequest) {
     .where(and(...conditions))
     .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
 
-  return ok(rows);
+  return ok(await withLabels(rows as TaskRow[]));
 }
 
 export async function POST(req: NextRequest) {

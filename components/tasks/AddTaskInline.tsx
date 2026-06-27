@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, FormEvent, useRef } from "react";
+import { parseHashtags, randomTagColor } from "@/lib/hashtag-utils";
 
 interface Props {
   defaults?: Record<string, unknown>;
@@ -8,6 +9,28 @@ interface Props {
   listId?: string;
   sectionId?: string;
   parentId?: string;
+}
+
+async function resolveLabels(tags: string[]): Promise<string[]> {
+  if (!tags.length) return [];
+  const existing: { id: string; name: string }[] = await fetch("/api/labels")
+    .then((r) => r.json())
+    .then((r) => r.data ?? []);
+  const ids: string[] = [];
+  for (const tag of tags) {
+    const found = existing.find((l) => l.name.toLowerCase() === tag);
+    if (found) {
+      ids.push(found.id);
+    } else {
+      const created = await fetch("/api/labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: tag, color: randomTagColor() }),
+      }).then((r) => r.json()).then((r) => r.data);
+      if (created?.id) ids.push(created.id);
+    }
+  }
+  return ids;
 }
 
 export default function AddTaskInline({ defaults, onCreated, listId, sectionId, parentId }: Props) {
@@ -26,15 +49,19 @@ export default function AddTaskInline({ defaults, onCreated, listId, sectionId, 
     if (!title.trim()) return;
     setSubmitting(true);
 
+    const { cleanTitle, tags } = parseHashtags(title.trim());
+    const labelIds = await resolveLabels(tags);
+
     await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: title.trim(),
+        title: cleanTitle || title.trim(),
         listId: listId ?? defaults?.listId ?? null,
         sectionId: sectionId ?? defaults?.sectionId ?? null,
         parentId: parentId ?? defaults?.parentId ?? null,
         ...defaults,
+        ...(labelIds.length ? { labelIds } : {}),
       }),
     });
 
