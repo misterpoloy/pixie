@@ -656,7 +656,7 @@ export default function TaskDetailModal({ task: initial, onClose, referenceDate 
 
                 {/* Title */}
                 <span
-                  onClick={() => isSelected ? closeSub() : openSub(sub)}
+                  onClick={() => openSub(sub)}
                   style={{
                     flex: 1, fontSize: "0.875rem",
                     color: done ? "var(--text-muted)" : isSelected ? "var(--accent-hover)" : hl ? hl.textColor : "var(--text-primary)",
