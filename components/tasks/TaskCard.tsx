@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { formatDate, isToday, isTomorrow } from "@/lib/date-helpers";
 import { resolveHighlight } from "@/lib/subtask-highlights";
+import { useToast } from "@/components/ui/ToastContext";
 
 interface TaskLabel {
   labelId: string;
@@ -183,14 +185,27 @@ export default function TaskCard({ task, onOpen, referenceDate }: Props) {
   const isDone = task.status === "done";
   const dateInfo = dueDateLabel(task.dueDate, task.hideOverdue);
   const hasCover = !!task.coverImage;
-  const subtasks = task.subtasks ?? [];
+  const { toast } = useToast();
 
+  const [subtasks, setSubtasks] = useState(task.subtasks ?? []);
+  useEffect(() => setSubtasks(task.subtasks ?? []), [task.subtasks]);
+
+  // Flip instantly, confirm via toast once the PATCH lands, revert on failure.
   async function handleSubtaskToggle(id: string, done: boolean) {
-    await fetch(`/api/tasks/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: done ? "done" : "pending" }),
-    });
+    const prev = subtasks;
+    setSubtasks((cur) => cur.map((s) => (s.id === id ? { ...s, status: done ? "done" : "pending" } : s)));
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: done ? "done" : "pending" }),
+      });
+      if (!res.ok) throw new Error();
+      toast(done ? "Subtask completed" : "Subtask reopened", { variant: "success" });
+    } catch {
+      setSubtasks(prev);
+      toast("Could not update subtask", { variant: "error" });
+    }
   }
 
   return (
