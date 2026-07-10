@@ -49,16 +49,24 @@ async function run() {
     const filepath = path.join(migrationsDir, filename);
     const raw = fs.readFileSync(filepath, "utf-8");
 
-    // Drizzle uses `--> statement-breakpoint` as a separator
+    // Drizzle uses `--> statement-breakpoint` as a separator; hand-written
+    // migration files often skip it and just rely on trailing semicolons, so
+    // split on both to guarantee one statement per query() call — Postgres's
+    // extended query protocol (which query() uses) rejects multiple commands
+    // in a single statement.
     const statements = raw
       .split("--> statement-breakpoint")
+      .flatMap((chunk) => chunk.split(";"))
       .map((s) => s.trim())
       .filter(Boolean);
 
     console.log(`  ⏳ Applying ${filename} (${statements.length} statement${statements.length !== 1 ? "s" : ""})…`);
 
     for (const statement of statements) {
-      await sql.unsafe(statement);
+      // sql.unsafe() only builds a raw-SQL fragment for embedding inside a
+      // tagged-template query — it does not execute anything on its own.
+      // sql.query() is the driver's actual "run this SQL string" method.
+      await sql.query(statement);
     }
 
     await sql`INSERT INTO _migrations (filename) VALUES (${filename})`;
