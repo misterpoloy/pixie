@@ -67,6 +67,8 @@ export default function TodayView({ dateStr, localDate }: { dateStr: string; loc
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showClock, setShowClock]       = useState(false);
+  const [showClosedToday, setShowClosedToday]       = useState(true);
+  const [showClosedThisWeek, setShowClosedThisWeek] = useState(false);
 
   // The currently selected calendar date — drives task fetch, highlights, bitacora
   const [selectedDate, setSelectedDate] = useState(localDate);
@@ -204,6 +206,40 @@ export default function TodayView({ dateStr, localDate }: { dateStr: string; loc
               </svg>
             </button>
           </div>
+
+          {viewMode === "card" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                onClick={() => setShowClosedToday((v) => !v)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  padding: "5px 11px", borderRadius: "var(--radius-full)",
+                  border: "1px solid var(--glass-border)",
+                  background: showClosedToday ? "var(--accent-dim)" : "transparent",
+                  color: showClosedToday ? "var(--accent-hover)" : "var(--text-muted)",
+                  fontSize: "0.75rem", fontWeight: 500, cursor: "pointer",
+                  transition: "all var(--transition-fast)",
+                }}
+              >
+                Closed today
+              </button>
+              <button
+                onClick={() => setShowClosedThisWeek((v) => !v)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  padding: "5px 11px", borderRadius: "var(--radius-full)",
+                  border: "1px solid var(--glass-border)",
+                  background: showClosedThisWeek ? "var(--accent-dim)" : "transparent",
+                  color: showClosedThisWeek ? "var(--accent-hover)" : "var(--text-muted)",
+                  fontSize: "0.75rem", fontWeight: 500, cursor: "pointer",
+                  transition: "all var(--transition-fast)",
+                }}
+              >
+                Closed this week
+              </button>
+            </div>
+          )}
+
           <ViewToggle mode={viewMode} onChange={changeView} />
         </div>
       </div>
@@ -221,7 +257,13 @@ export default function TodayView({ dateStr, localDate }: { dateStr: string; loc
       {/* ── Card view ─────────────────────────────────────────── */}
       {viewMode === "card" && !loading && (
         <>
-          <DraggableCardGrid tasks={pending} onOpen={setOpenTask} referenceDate={selectedDate} />
+          <DraggableCardGrid
+            tasks={pending}
+            onOpen={setOpenTask}
+            referenceDate={selectedDate}
+            showClosedToday={showClosedToday}
+            showClosedThisWeek={showClosedThisWeek}
+          />
 
           {done.length > 0 && (
             <details style={{ marginTop: 28 }}>
@@ -229,7 +271,13 @@ export default function TodayView({ dateStr, localDate }: { dateStr: string; loc
                 <span>✓</span> Completed ({done.length})
               </summary>
               <div style={{ marginTop: 12, opacity: 0.5 }}>
-                <DraggableCardGrid tasks={done} onOpen={setOpenTask} referenceDate={selectedDate} />
+                <DraggableCardGrid
+                  tasks={done}
+                  onOpen={setOpenTask}
+                  referenceDate={selectedDate}
+                  showClosedToday={showClosedToday}
+                  showClosedThisWeek={showClosedThisWeek}
+                />
               </div>
             </details>
           )}

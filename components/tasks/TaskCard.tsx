@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isThisWeek } from "date-fns";
 import { formatDate, isToday, isTomorrow } from "@/lib/date-helpers";
 import { resolveHighlight } from "@/lib/subtask-highlights";
 import { useToast } from "@/components/ui/ToastContext";
@@ -32,6 +33,8 @@ interface Props {
   task: Task;
   onOpen: (task: Task) => void;
   referenceDate?: string; // YYYY-MM-DD for highlight system; defaults to today
+  showClosedToday?: boolean; // default true — matches prior always-on behavior
+  showClosedThisWeek?: boolean; // default false — opt-in, keeps cards compact
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -74,18 +77,31 @@ interface SubtaskStripProps {
   subtasks: Task[];
   onSubtaskToggle?: (id: string, done: boolean) => void;
   referenceDate?: string;
+  showClosedToday?: boolean;
+  showClosedThisWeek?: boolean;
 }
 
-function SubtaskStrip({ subtasks, onSubtaskToggle, referenceDate }: SubtaskStripProps) {
+function SubtaskStrip({ subtasks, onSubtaskToggle, referenceDate, showClosedToday = true, showClosedThisWeek = false }: SubtaskStripProps) {
   if (!subtasks.length) return null;
 
   const doneCount = subtasks.filter((s) => s.status === "done").length;
   const progress = doneCount / subtasks.length;
 
-  // Pending first, then done-on-referenceDate last; hide older completed
+  // Pending always shown. Closed-today and closed-this-week are each opt-in
+  // via the header toggles; anything closed before this week stays hidden —
+  // there's no "see all" here, cards need to stay compact.
   const pending = subtasks.filter((s) => s.status !== "done" && s.status !== "cancelled");
   const doneToday = subtasks.filter((s) => s.status === "done" && resolveHighlight(s, referenceDate) !== null);
-  const showable = [...pending, ...doneToday];
+  const doneThisWeek = subtasks.filter((s) => {
+    if (s.status !== "done" || !s.completedAt) return false;
+    if (resolveHighlight(s, referenceDate) !== null) return false; // already in doneToday
+    return isThisWeek(new Date(s.completedAt), { weekStartsOn: 1 });
+  });
+  const showable = [
+    ...pending,
+    ...(showClosedToday ? doneToday : []),
+    ...(showClosedThisWeek ? doneThisWeek : []),
+  ];
   const visible = showable.slice(0, MAX_VISIBLE);
   const overflow = showable.length - MAX_VISIBLE;
 
@@ -181,7 +197,7 @@ function SubtaskStrip({ subtasks, onSubtaskToggle, referenceDate }: SubtaskStrip
 
 // ── TaskCard ──────────────────────────────────────────────────────────────────
 
-export default function TaskCard({ task, onOpen, referenceDate }: Props) {
+export default function TaskCard({ task, onOpen, referenceDate, showClosedToday, showClosedThisWeek }: Props) {
   const isDone = task.status === "done";
   const dateInfo = dueDateLabel(task.dueDate, task.hideOverdue);
   const hasCover = !!task.coverImage;
@@ -314,7 +330,13 @@ export default function TaskCard({ task, onOpen, referenceDate }: Props) {
 
       {/* Subtask strip — only rendered when subtasks exist */}
       {subtasks.length > 0 && (
-        <SubtaskStrip subtasks={subtasks} onSubtaskToggle={handleSubtaskToggle} referenceDate={referenceDate} />
+        <SubtaskStrip
+          subtasks={subtasks}
+          onSubtaskToggle={handleSubtaskToggle}
+          referenceDate={referenceDate}
+          showClosedToday={showClosedToday}
+          showClosedThisWeek={showClosedThisWeek}
+        />
       )}
     </div>
   );
