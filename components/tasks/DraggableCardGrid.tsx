@@ -21,9 +21,11 @@ interface Props {
   tasks: Task[];
   onOpen: (task: Task) => void;
   referenceDate?: string;
+  showClosedToday?: boolean;
+  showClosedThisWeek?: boolean;
 }
 
-export default function DraggableCardGrid({ tasks: propTasks, onOpen, referenceDate }: Props) {
+export default function DraggableCardGrid({ tasks: propTasks, onOpen, referenceDate, showClosedToday, showClosedThisWeek }: Props) {
   const [tasks, setTasks] = useState(propTasks);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -96,7 +98,13 @@ export default function DraggableCardGrid({ tasks: propTasks, onOpen, referenceD
             cursor: "grab",
           }}
         >
-          <TaskCard task={task} onOpen={onOpen} referenceDate={referenceDate} />
+          <TaskCard
+            task={task}
+            onOpen={onOpen}
+            referenceDate={referenceDate}
+            showClosedToday={showClosedToday}
+            showClosedThisWeek={showClosedThisWeek}
+          />
         </div>
       ))}
     </div>
