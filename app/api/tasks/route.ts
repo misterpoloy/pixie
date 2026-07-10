@@ -121,14 +121,36 @@ export async function GET(req: NextRequest) {
       .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
 
     return ok(await withLabels([...parentRows, ...childRows] as TaskRow[]));
-  } else if (view === "tomorrow") {
-    const tom = addDays(new Date(), 1);
-    conditions.push(gte(tasks.dueDate, startOfDay(tom)));
-    conditions.push(lte(tasks.dueDate, endOfDay(tom)));
-  } else if (view === "upcoming") {
-    conditions.push(eq(tasks.isUpcoming, true));
-  } else if (view === "someday") {
-    conditions.push(eq(tasks.isSomeday, true));
+  } else if (view === "tomorrow" || view === "upcoming" || view === "someday") {
+    if (view === "tomorrow") {
+      const tom = addDays(new Date(), 1);
+      conditions.push(gte(tasks.dueDate, startOfDay(tom)));
+      conditions.push(lte(tasks.dueDate, endOfDay(tom)));
+    } else if (view === "upcoming") {
+      conditions.push(eq(tasks.isUpcoming, true));
+    } else if (view === "someday") {
+      conditions.push(eq(tasks.isSomeday, true));
+    }
+
+    // Same parent+child pattern as view=today: subtasks don't carry their own
+    // isUpcoming/isSomeday/dueDate, so they must be pulled in by parentId or
+    // they'd silently disappear whenever a parent task is moved into this view.
+    const parentRows = await db
+      .select()
+      .from(tasks)
+      .where(and(...conditions))
+      .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
+
+    if (parentRows.length === 0) return ok([]);
+
+    const parentIds = parentRows.map((r) => r.id);
+    const childRows = await db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.userId, userId), inArray(tasks.parentId, parentIds)))
+      .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
+
+    return ok(await withLabels([...parentRows, ...childRows] as TaskRow[]));
   }
 
   const rows = await db

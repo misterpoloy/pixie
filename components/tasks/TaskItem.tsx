@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDate, formatElapsedDays, isToday, isTomorrow } from "@/lib/date-helpers";
+import { useToast } from "@/components/ui/ToastContext";
 
 interface Label {
   id?: string;
@@ -59,7 +60,12 @@ function isCreatedToday(createdAt?: string): boolean {
 
 export default function TaskItem({ task, depth = 0, metaMode = "default", onToggle, onOpen, onRefresh }: Props) {
   const [expanded, setExpanded] = useState(true);
-  const isDone = task.status === "done";
+  const [localStatus, setLocalStatus] = useState(task.status);
+  const { toast } = useToast();
+
+  useEffect(() => setLocalStatus(task.status), [task.status]);
+
+  const isDone = localStatus === "done";
   const createdToday = !isDone && isCreatedToday(task.createdAt);
   const dateInfo = dueDateLabel(task.dueDate, task.hideOverdue);
   const metaText =
@@ -68,15 +74,26 @@ export default function TaskItem({ task, depth = 0, metaMode = "default", onTogg
       : dateInfo;
   const hasSubtasks = task.subtasks && task.subtasks.length > 0;
 
+  // Flip instantly, confirm via toast once the PATCH lands, revert on failure.
   async function toggle() {
+    const prevStatus = localStatus;
     const newStatus = isDone ? "pending" : "done";
-    await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    onToggle?.(task.id, !isDone);
-    onRefresh?.();
+    setLocalStatus(newStatus);
+    onToggle?.(task.id, newStatus === "done");
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error();
+      toast(newStatus === "done" ? "Task completed" : "Task reopened", { variant: "success" });
+      onRefresh?.();
+    } catch {
+      setLocalStatus(prevStatus);
+      onToggle?.(task.id, prevStatus === "done");
+      toast("Could not update task", { variant: "error" });
+    }
   }
 
   return (

@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow, format, isToday, isYesterday, isThisWeek } from "date-fns";
 import AddTaskInline from "./AddTaskInline";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import SubtaskTagPicker from "./SubtaskTagPicker";
 import SubtaskMovePicker from "./SubtaskMovePicker";
 import { resolveHighlight } from "@/lib/subtask-highlights";
+import { addDays } from "@/lib/date-helpers";
+import { useToast } from "@/components/ui/ToastContext";
 
 interface TaskLabel {
   labelId: string;
@@ -69,6 +71,13 @@ const PRIORITIES = ["none", "low", "medium", "high"] as const;
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending", in_progress: "In Progress", done: "Done", cancelled: "Cancelled",
 };
+
+const MOVE_TARGETS = [
+  { key: "tomorrow", label: "Tomorrow" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "someday", label: "Someday" },
+] as const;
+type MoveTarget = (typeof MOVE_TARGETS)[number]["key"];
 
 function Chip({ bg, border, color, children }: { bg: string; border: string; color: string; children: React.ReactNode }) {
   return (
@@ -360,6 +369,7 @@ function MetaRow({ icon, label, value, valueColor, title }: { icon: string; labe
 export default function TaskDetailModal({ task: initial, onClose, referenceDate }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
 
   const [task, setTask] = useState(initial);
   const [subtasks, setSubtasks] = useState<Task[]>(initial.subtasks ?? []);
@@ -368,11 +378,25 @@ export default function TaskDetailModal({ task: initial, onClose, referenceDate 
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showAllClosed, setShowAllClosed] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedSub, setSelectedSub] = useState<Task | null>(null);
   const [tagPickerSubId, setTagPickerSubId] = useState<string | null>(null);
   const [movePickerSubId, setMovePickerSubId] = useState<string | null>(null);
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const moveMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMoveMenu) return;
+    function handleClick(e: MouseEvent) {
+      if (moveMenuRef.current && !moveMenuRef.current.contains(e.target as Node)) {
+        setShowMoveMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showMoveMenu]);
 
   // Load full task data
   useEffect(() => {
@@ -419,10 +443,63 @@ export default function TaskDetailModal({ task: initial, onClose, referenceDate 
     setSaving(false);
   }
 
+  // Flips the checkbox instantly instead of waiting on the round-trip, then
+  // reconciles with the server response and confirms via toast. Reverts on failure.
+  async function toggleTaskStatus() {
+    const prevStatus = task.status;
+    const prevCompletedAt = task.completedAt;
+    const nextStatus = prevStatus === "done" ? "pending" : "done";
+    setTask((prev) => ({ ...prev, status: nextStatus }));
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const d = await res.json();
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "Could not update task");
+      setTask((prev) => ({ ...prev, ...d.data }));
+      toast(nextStatus === "done" ? "Task completed" : "Task reopened", { variant: "success" });
+    } catch (e) {
+      setTask((prev) => ({ ...prev, status: prevStatus, completedAt: prevCompletedAt }));
+      toast(e instanceof Error ? e.message : "Could not update task", { variant: "error" });
+    }
+  }
+
   async function deleteTask() {
     setDeleting(true);
     await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
     onClose();
+  }
+
+  // Moves this task (and its subtasks, which tag along since they render under
+  // the parent regardless of view) out of Today and into another view. The
+  // today/tomorrow filters key off dueDate alone, so dueDate must be cleared
+  // when moving to Upcoming/Someday or the task would linger in both views.
+  async function moveTask(target: MoveTarget) {
+    setShowMoveMenu(false);
+    setMoving(true);
+    const updates: Partial<Task> =
+      target === "tomorrow"
+        ? { dueDate: addDays(new Date(), 1).toISOString(), isSomeday: false, isUpcoming: false }
+        : target === "upcoming"
+          ? { isUpcoming: true, isSomeday: false, dueDate: null }
+          : { isSomeday: true, isUpcoming: false, dueDate: null };
+
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    const d = await res.json();
+    setMoving(false);
+    if (d.ok) {
+      const label = MOVE_TARGETS.find((t) => t.key === target)!.label;
+      toast(`Moved to ${label}`, { variant: "success" });
+      onClose();
+    } else {
+      toast(d.error ?? "Could not move task", { variant: "error" });
+    }
   }
 
   function refreshSubtasks() {
@@ -477,10 +554,61 @@ export default function TaskDetailModal({ task: initial, onClose, referenceDate 
       }} />
 
       <div style={{ position: "absolute", top: 12, left: 14, right: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <button className={`task-check ${isDone ? "done" : ""}`} onClick={() => patch({ status: isDone ? "pending" : "done" })} style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
+        <button className={`task-check ${isDone ? "done" : ""}`} onClick={toggleTaskStatus} style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
           {isDone && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
         </button>
         <div style={{ display: "flex", gap: 6 }}>
+          <div ref={moveMenuRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowMoveMenu((v) => !v)}
+              disabled={moving}
+              title="Move to another view"
+              style={{
+                background: showMoveMenu ? "rgba(124,110,247,0.35)" : "rgba(255,255,255,0.12)",
+                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                border: `1px solid ${showMoveMenu ? "rgba(124,110,247,0.5)" : "rgba(255,255,255,0.18)"}`,
+                borderRadius: 8, padding: "5px 10px",
+                color: showMoveMenu ? "var(--accent-hover)" : "var(--text-primary)",
+                fontSize: "0.75rem", fontWeight: 600, cursor: moving ? "default" : "pointer",
+                display: "flex", alignItems: "center", gap: 5,
+                transition: "all var(--transition-fast)",
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              {moving ? "Moving…" : "Move"}
+            </button>
+
+            {showMoveMenu && (
+              <div style={{
+                position: "absolute", top: "100%", right: 0, marginTop: 6, zIndex: 20,
+                width: 160,
+                background: "var(--bg-elevated)",
+                border: "1px solid var(--glass-border-strong)",
+                borderRadius: "var(--radius-md)",
+                boxShadow: "0 16px 48px rgba(0,0,0,0.6)",
+                overflow: "hidden",
+              }}>
+                {MOVE_TARGETS.map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => moveTask(t.key)}
+                    style={{
+                      width: "100%", textAlign: "left",
+                      background: "transparent", border: "none",
+                      borderBottom: "1px solid rgba(255,255,255,0.04)",
+                      padding: "8px 12px", cursor: "pointer",
+                      color: "var(--text-primary)", fontSize: "0.82rem",
+                      transition: "background var(--transition-fast)",
+                    }}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--bg-hover)")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "transparent")}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={() => setEditMode((m) => !m)} style={{
             background: editMode ? "rgba(124,110,247,0.35)" : "rgba(255,255,255,0.12)",
             backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
@@ -581,196 +709,262 @@ export default function TaskDetailModal({ task: initial, onClose, referenceDate 
   // ── Subtasks ──────────────────────────────────────────────────────────────────
 
   const openSubs = subtasks.filter((s) => s.status !== "done" && s.status !== "cancelled");
-  // Completed today: resolved highlight exists (completedTodayHighlight fires) — shown by default
-  const doneTodaySubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s, referenceDate) !== null);
-  // Completed on a day other than referenceDate: hidden by default, revealed by toggle
-  const doneOlderSubs = subtasks.filter((s) => s.status === "done" && resolveHighlight(s, referenceDate) === null);
+  const doneSubs = subtasks.filter((s) => s.status === "done");
 
-  // Default view: pending + today's completed. Expanded view: also adds older completed.
-  const visibleSubs = showCompleted
-    ? [...openSubs, ...doneTodaySubs, ...doneOlderSubs]
-    : [...openSubs, ...doneTodaySubs];
-
-  async function toggleSubStatus(sub: Task) {
-    const next = sub.status === "done" ? "pending" : "done";
-    await fetch(`/api/tasks/${sub.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next }),
-    });
-    refreshSubtasks();
+  // Bucket completed subtasks into fixed, always-visible windows — everything
+  // older than "this week" is hidden behind the "See all closed" toggle so the
+  // list doesn't grow unbounded as tasks accumulate completions over time.
+  function closedBucket(sub: Task): "today" | "yesterday" | "week" | "older" {
+    if (!sub.completedAt) return "older";
+    const d = new Date(sub.completedAt);
+    if (isToday(d)) return "today";
+    if (isYesterday(d)) return "yesterday";
+    if (isThisWeek(d, { weekStartsOn: 1 })) return "week";
+    return "older";
   }
+
+  const closedToday = doneSubs.filter((s) => closedBucket(s) === "today");
+  const closedYesterday = doneSubs.filter((s) => closedBucket(s) === "yesterday");
+  const closedThisWeek = doneSubs.filter((s) => closedBucket(s) === "week");
+  const closedOlder = doneSubs.filter((s) => closedBucket(s) === "older");
+
+  // Optimistically flips the row so the checkbox responds instantly, instead of
+  // waiting on a PATCH + full subtask refetch chained one after another. Confirms
+  // via toast once the PATCH actually lands, then reconciles the closed-today/
+  // yesterday/week groupings against the server's completedAt. Reverts on failure.
+  async function toggleSubStatus(sub: Task) {
+    const prevSubtasks = subtasks;
+    const next = sub.status === "done" ? "pending" : "done";
+    setSubtasks((prev) => prev.map((s) => (s.id === sub.id ? { ...s, status: next } : s)));
+    if (selectedSub?.id === sub.id) {
+      setSelectedSub((s) => (s ? { ...s, status: next } : s));
+    }
+    try {
+      const res = await fetch(`/api/tasks/${sub.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      const d = await res.json();
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "Could not update subtask");
+      toast(next === "done" ? "Subtask completed" : "Subtask reopened", { variant: "success" });
+      refreshSubtasks();
+    } catch (e) {
+      setSubtasks(prevSubtasks);
+      if (selectedSub?.id === sub.id) {
+        setSelectedSub((s) => (s ? { ...s, status: sub.status } : s));
+      }
+      toast(e instanceof Error ? e.message : "Could not update subtask", { variant: "error" });
+    }
+  }
+
+  function renderSubtaskRow(sub: Task) {
+    const done = sub.status === "done";
+    const isSelected = selectedSub?.id === sub.id;
+    const subLabels = sub.labels ?? [];
+    const pickerOpen = tagPickerSubId === sub.id;
+    const movePickerOpen = movePickerSubId === sub.id;
+    const hl = resolveHighlight(sub, referenceDate);
+    return (
+      <div key={sub.id} style={{ position: "relative" }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "7px 4px", borderBottom: "1px solid var(--glass-border)",
+          opacity: done ? 0.6 : 1,
+          background: isSelected ? "rgba(124,110,247,0.06)" : hl ? hl.rowBg : "transparent",
+          transition: "all var(--transition-fast)",
+          borderRadius: isSelected || hl ? 6 : 0,
+        }}>
+          {/* Checkbox */}
+          <button
+            className={`task-check ${done ? "done" : ""}`}
+            style={{ width: 17, height: 17, minWidth: 17, flexShrink: 0, ...(hl && !done ? { borderColor: hl.checkBorderColor } : {}) }}
+            onClick={() => toggleSubStatus(sub)}
+          >
+            {done && <svg width="8" height="6" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+          </button>
+
+          {/* Title */}
+          <span
+            onClick={() => openSub(sub)}
+            style={{
+              flex: 1, fontSize: "0.875rem",
+              color: done ? "var(--text-muted)" : isSelected ? "var(--accent-hover)" : hl ? hl.textColor : "var(--text-primary)",
+              fontWeight: hl && !done ? 500 : 400,
+              textDecoration: done ? "line-through" : "none",
+              cursor: "pointer", transition: "color var(--transition-fast)",
+            }}
+          >
+            {sub.title}
+          </span>
+
+          {/* Completed-when label */}
+          {done && sub.completedAt && (
+            <span
+              title={formatDateTime(sub.completedAt)}
+              style={{ fontSize: "0.68rem", color: "var(--text-muted)", flexShrink: 0, whiteSpace: "nowrap" }}
+            >
+              {timeAgo(sub.completedAt)}
+            </span>
+          )}
+
+          {/* Label pills */}
+          {subLabels.map((lbl) => (
+            <span key={lbl.labelId} style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              padding: "2px 7px", borderRadius: "var(--radius-full)",
+              fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.02em",
+              background: `${lbl.color}22`,
+              border: `1px solid ${lbl.color}55`,
+              color: lbl.color,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: lbl.color, display: "inline-block" }} />
+              {lbl.name}
+            </span>
+          ))}
+
+          {/* Add tag button */}
+          {!done && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setTagPickerSubId(pickerOpen ? null : sub.id); setMovePickerSubId(null); }}
+              title="Add tag"
+              style={{
+                width: 20, height: 20, borderRadius: 4, border: "1px dashed var(--glass-border)",
+                background: "transparent", color: "var(--text-muted)", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "0.75rem", flexShrink: 0, lineHeight: 1,
+                transition: "all var(--transition-fast)",
+              }}
+            >
+              #
+            </button>
+          )}
+
+          {/* Move to button */}
+          {!done && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setMovePickerSubId(movePickerOpen ? null : sub.id); setTagPickerSubId(null); }}
+              title="Move to another task"
+              style={{
+                width: 20, height: 20, borderRadius: 4, border: "1px dashed var(--glass-border)",
+                background: movePickerOpen ? "var(--accent-dim)" : "transparent",
+                color: movePickerOpen ? "var(--accent-hover)" : "var(--text-muted)",
+                cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+                transition: "all var(--transition-fast)",
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
+
+          {/* "new" highlight badge */}
+          {hl?.badgeLabel && (
+            <span style={{
+              fontSize: "0.6rem", fontWeight: 700, padding: "2px 6px",
+              borderRadius: "var(--radius-full)", flexShrink: 0,
+              color: hl.badgeColor, background: hl.badgeBg, border: `1px solid ${hl.badgeBorder}`,
+            }}>
+              {hl.badgeLabel}
+            </span>
+          )}
+
+          {/* Open panel indicator */}
+          <span style={{ fontSize: "0.65rem", color: isSelected ? "var(--accent)" : "var(--text-muted)", opacity: isSelected ? 1 : 0, transition: "opacity var(--transition-fast)", paddingRight: 4 }}>
+            ›
+          </span>
+        </div>
+
+        {/* Tag picker popover */}
+        {pickerOpen && (
+          <SubtaskTagPicker
+            taskId={sub.id}
+            current={subLabels.map((l) => ({ id: l.labelId, name: l.name, color: l.color }))}
+            onUpdate={(updated) => {
+              setSubtasks((prev) => prev.map((s) =>
+                s.id === sub.id
+                  ? { ...s, labels: updated.map((u) => ({ labelId: u.id, name: u.name, color: u.color })) }
+                  : s
+              ));
+            }}
+            onClose={() => setTagPickerSubId(null)}
+          />
+        )}
+
+        {/* Move picker popover */}
+        {movePickerOpen && (
+          <SubtaskMovePicker
+            subtaskId={sub.id}
+            currentParentId={task.id}
+            onMoved={refreshSubtasks}
+            onClose={() => setMovePickerSubId(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  function ClosedGroupHeader({ label, count }: { label: string; count: number }) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "baseline", gap: 6, margin: "12px 0 2px",
+        fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.06em",
+        textTransform: "uppercase", color: "var(--text-muted)",
+      }}>
+        {label} <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>({count})</span>
+      </div>
+    );
+  }
+
+  const hasClosed = closedToday.length > 0 || closedYesterday.length > 0 || closedThisWeek.length > 0 || closedOlder.length > 0;
 
   const subtasksSection = (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <div className="section-header" style={{ margin: 0 }}>
-          <span>↳</span> Subtasks ({openSubs.length})
-        </div>
-        {doneOlderSubs.length > 0 && (
-          <button onClick={() => setShowCompleted((v) => !v)} style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            padding: "3px 10px", borderRadius: "var(--radius-full)",
-            border: "1px solid var(--glass-border)",
-            background: showCompleted ? "var(--accent-dim)" : "transparent",
-            color: showCompleted ? "var(--accent-hover)" : "var(--text-muted)",
-            fontSize: "0.7rem", fontWeight: 500, cursor: "pointer",
-            transition: "all var(--transition-fast)",
-          }}>
-            {showCompleted
-              ? <><svg width="9" height="9" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>Hide completed</>
-              : <>{doneOlderSubs.length} completed</>
-            }
-          </button>
-        )}
+      <div className="section-header" style={{ marginBottom: 8 }}>
+        <span>↳</span> Subtasks ({openSubs.length})
       </div>
 
       <div>
-        {visibleSubs.map((sub) => {
-          const done = sub.status === "done";
-          const isSelected = selectedSub?.id === sub.id;
-          const subLabels = sub.labels ?? [];
-          const pickerOpen = tagPickerSubId === sub.id;
-          const movePickerOpen = movePickerSubId === sub.id;
-          return (
-            <div key={sub.id} style={{ position: "relative" }}>
-              {(() => {
-                const hl = resolveHighlight(sub, referenceDate);
-                return (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "7px 4px", borderBottom: "1px solid var(--glass-border)",
-                opacity: done ? 0.6 : 1,
-                background: isSelected ? "rgba(124,110,247,0.06)" : hl ? hl.rowBg : "transparent",
-                transition: "all var(--transition-fast)",
-                borderRadius: isSelected || hl ? 6 : 0,
-              }}>
-                {/* Checkbox */}
-                <button
-                  className={`task-check ${done ? "done" : ""}`}
-                  style={{ width: 17, height: 17, minWidth: 17, flexShrink: 0, ...(hl && !done ? { borderColor: hl.checkBorderColor } : {}) }}
-                  onClick={() => toggleSubStatus(sub)}
-                >
-                  {done && <svg width="8" height="6" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                </button>
-
-                {/* Title */}
-                <span
-                  onClick={() => openSub(sub)}
-                  style={{
-                    flex: 1, fontSize: "0.875rem",
-                    color: done ? "var(--text-muted)" : isSelected ? "var(--accent-hover)" : hl ? hl.textColor : "var(--text-primary)",
-                    fontWeight: hl && !done ? 500 : 400,
-                    textDecoration: done ? "line-through" : "none",
-                    cursor: "pointer", transition: "color var(--transition-fast)",
-                  }}
-                >
-                  {sub.title}
-                </span>
-
-                {/* Label pills */}
-                {subLabels.map((lbl) => (
-                  <span key={lbl.labelId} style={{
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                    padding: "2px 7px", borderRadius: "var(--radius-full)",
-                    fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.02em",
-                    background: `${lbl.color}22`,
-                    border: `1px solid ${lbl.color}55`,
-                    color: lbl.color,
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: lbl.color, display: "inline-block" }} />
-                    {lbl.name}
-                  </span>
-                ))}
-
-                {/* Add tag button */}
-                {!done && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setTagPickerSubId(pickerOpen ? null : sub.id); setMovePickerSubId(null); }}
-                    title="Add tag"
-                    style={{
-                      width: 20, height: 20, borderRadius: 4, border: "1px dashed var(--glass-border)",
-                      background: "transparent", color: "var(--text-muted)", cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "0.75rem", flexShrink: 0, lineHeight: 1,
-                      transition: "all var(--transition-fast)",
-                    }}
-                  >
-                    #
-                  </button>
-                )}
-
-                {/* Move to button */}
-                {!done && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setMovePickerSubId(movePickerOpen ? null : sub.id); setTagPickerSubId(null); }}
-                    title="Move to another task"
-                    style={{
-                      width: 20, height: 20, borderRadius: 4, border: "1px dashed var(--glass-border)",
-                      background: movePickerOpen ? "var(--accent-dim)" : "transparent",
-                      color: movePickerOpen ? "var(--accent-hover)" : "var(--text-muted)",
-                      cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      flexShrink: 0,
-                      transition: "all var(--transition-fast)",
-                    }}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                )}
-
-                  {/* "new" highlight badge */}
-                {hl?.badgeLabel && (
-                  <span style={{
-                    fontSize: "0.6rem", fontWeight: 700, padding: "2px 6px",
-                    borderRadius: "var(--radius-full)", flexShrink: 0,
-                    color: hl.badgeColor, background: hl.badgeBg, border: `1px solid ${hl.badgeBorder}`,
-                  }}>
-                    {hl.badgeLabel}
-                  </span>
-                )}
-
-                {/* Open panel indicator */}
-                <span style={{ fontSize: "0.65rem", color: isSelected ? "var(--accent)" : "var(--text-muted)", opacity: isSelected ? 1 : 0, transition: "opacity var(--transition-fast)", paddingRight: 4 }}>
-                  ›
-                </span>
-              </div>
-              ); })()}
-
-              {/* Tag picker popover */}
-              {pickerOpen && (
-                <SubtaskTagPicker
-                  taskId={sub.id}
-                  current={subLabels.map((l) => ({ id: l.labelId, name: l.name, color: l.color }))}
-                  onUpdate={(updated) => {
-                    setSubtasks((prev) => prev.map((s) =>
-                      s.id === sub.id
-                        ? { ...s, labels: updated.map((u) => ({ labelId: u.id, name: u.name, color: u.color })) }
-                        : s
-                    ));
-                  }}
-                  onClose={() => setTagPickerSubId(null)}
-                />
-              )}
-
-              {/* Move picker popover */}
-              {movePickerOpen && (
-                <SubtaskMovePicker
-                  subtaskId={sub.id}
-                  currentParentId={task.id}
-                  onMoved={refreshSubtasks}
-                  onClose={() => setMovePickerSubId(null)}
-                />
-              )}
-            </div>
-          );
-        })}
+        {openSubs.map(renderSubtaskRow)}
         <AddTaskInline parentId={task.id} listId={task.listId ?? undefined} onCreated={refreshSubtasks} />
       </div>
+
+      {hasClosed && (
+        <div>
+          {closedToday.length > 0 && (<>
+            <ClosedGroupHeader label="Closed today" count={closedToday.length} />
+            {closedToday.map(renderSubtaskRow)}
+          </>)}
+          {closedYesterday.length > 0 && (<>
+            <ClosedGroupHeader label="Closed yesterday" count={closedYesterday.length} />
+            {closedYesterday.map(renderSubtaskRow)}
+          </>)}
+          {closedThisWeek.length > 0 && (<>
+            <ClosedGroupHeader label="Closed this week" count={closedThisWeek.length} />
+            {closedThisWeek.map(renderSubtaskRow)}
+          </>)}
+          {showAllClosed && closedOlder.length > 0 && (<>
+            <ClosedGroupHeader label="Closed earlier" count={closedOlder.length} />
+            {closedOlder.map(renderSubtaskRow)}
+          </>)}
+          {!showAllClosed && closedOlder.length > 0 && (
+            <button onClick={() => setShowAllClosed(true)} style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              marginTop: 10, padding: "4px 11px", borderRadius: "var(--radius-full)",
+              border: "1px solid var(--glass-border)", background: "transparent",
+              color: "var(--text-muted)", fontSize: "0.72rem", fontWeight: 500, cursor: "pointer",
+              transition: "all var(--transition-fast)",
+            }}>
+              See all closed ({closedOlder.length})
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 
