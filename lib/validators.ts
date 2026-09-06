@@ -41,6 +41,7 @@ export const createTaskSchema = z.object({
   sortOrder: z.number().int().optional(),
   coverImage: z.string().url().optional().nullable(),
   hideOverdue: z.boolean().optional(),
+  recurrence: z.string().max(500).optional().nullable(),
 });
 
 export const updateTaskSchema = createTaskSchema.partial().extend({
