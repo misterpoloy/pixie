@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const conditions = [
     eq(tasks.userId, userId),
-    ilike(tasks.title, `%${q}%`),
+    or(ilike(tasks.title, `%${q}%`), ilike(tasks.notes, `%${q}%`))!,
   ];
 
   if (status) conditions.push(eq(tasks.status, status));
@@ -53,7 +53,10 @@ export async function GET(req: NextRequest) {
   const noteRows = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.userId, userId), ilike(notes.content, `%${q}%`)))
+    .where(and(
+      eq(notes.userId, userId),
+      or(ilike(notes.content, `%${q}%`), ilike(notes.title, `%${q}%`))!,
+    ))
     .limit(5);
 
   return ok({ tasks: taskRows, notes: noteRows, page, limit });
