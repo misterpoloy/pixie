@@ -47,7 +47,7 @@ function dueDateLabel(
   if (d < now) {
     if (hideOverdue) return null;
     const days = Math.round((now.getTime() - d.getTime()) / 86_400_000);
-    return { text: `+${days}d`, color: "var(--info)" };
+    return { text: `+${days}d overdue`, color: "var(--danger)" };
   }
   return { text: formatDate(date), color: "var(--text-muted)" };
 }
