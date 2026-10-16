@@ -14,7 +14,7 @@ import type { McpRequestContext } from "@modelcontextprotocol/server";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  and, asc, desc, eq, gte, ilike, inArray, isNull, lte, or,
+  and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or,
 } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -73,7 +73,10 @@ function registerPixieTools(server: McpServer, userId: string) {
     "list_tasks",
     {
       description:
-        "List tasks for the authenticated user. Supports smart views (today/tomorrow/upcoming/someday), a specific date, list, status, and parent filters.",
+        "List tasks for the authenticated user. Supports smart views (today/tomorrow/upcoming/someday), a specific date, list, status, and parent filters." +
+        " By default returns ROOT tasks only, each annotated with pendingSubtaskCount." +
+        " To fetch subtasks of a specific task pass parentId — you get a flat list of its children." +
+        " view=today matches the /today UI: excludes someday and upcoming tasks.",
       inputSchema: z.object({
         view: z
           .enum(["today", "tomorrow", "upcoming", "someday"])
@@ -96,20 +99,31 @@ function registerPixieTools(server: McpServer, userId: string) {
         rootOnly: z
           .boolean()
           .optional()
-          .describe("Only top-level tasks (no subtasks)"),
+          .describe("Deprecated — root-only is now the default when parentId is omitted."),
       }),
     },
     async (input) => {
-      const conds = [eq(tasks.userId, userId)];
-      if (input.listId) conds.push(eq(tasks.listId, input.listId));
-      if (input.status) conds.push(eq(tasks.status, input.status as "pending" | "in_progress" | "done" | "cancelled"));
-      if (input.parentId) {
-        conds.push(eq(tasks.parentId, input.parentId));
-      } else if (input.rootOnly) {
-        conds.push(isNull(tasks.parentId));
-      }
+      const baseConds = [eq(tasks.userId, userId)];
+      if (input.listId) baseConds.push(eq(tasks.listId, input.listId));
+      if (input.status) baseConds.push(eq(tasks.status, input.status as "pending" | "in_progress" | "done" | "cancelled"));
 
       const now = new Date();
+
+      // ── SUBTASK MODE: parentId provided → return children flat ────────────
+      if (input.parentId) {
+        const conds = [...baseConds, eq(tasks.parentId, input.parentId)];
+        const rows = (await db
+          .select()
+          .from(tasks)
+          .where(and(...conds))
+          .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt))) as AnyRow[];
+        const labeled = await withLabels(rows);
+        return { content: [{ type: "text" as const, text: JSON.stringify(labeled) }] };
+      }
+
+      // ── ROOT MODE: no parentId → root tasks only + pendingSubtaskCount ────
+      const conds = [...baseConds, isNull(tasks.parentId)];
+
       if (input.date) {
         const [y, m, d] = input.date.split("-").map(Number);
         conds.push(
@@ -117,7 +131,12 @@ function registerPixieTools(server: McpServer, userId: string) {
           lte(tasks.dueDate, new Date(y, m - 1, d, 23, 59, 59, 999)),
         );
       } else if (input.view === "today") {
-        conds.push(lte(tasks.dueDate, endOfDay(now)));
+        // Match /today UI exactly: due today or overdue, exclude someday & upcoming
+        conds.push(
+          lte(tasks.dueDate, endOfDay(now)),
+          eq(tasks.isSomeday, false),
+          eq(tasks.isUpcoming, false),
+        );
       } else if (input.view === "tomorrow") {
         const tom = addDays(now, 1);
         conds.push(gte(tasks.dueDate, startOfDay(tom)), lte(tasks.dueDate, endOfDay(tom)));
@@ -133,25 +152,36 @@ function registerPixieTools(server: McpServer, userId: string) {
         .where(and(...conds))
         .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt))) as AnyRow[];
 
-      // Also pull subtasks of the returned parents
-      const childRows: AnyRow[] = parentRows.length
-        ? (await db
-            .select()
-            .from(tasks)
-            .where(
-              and(
-                eq(tasks.userId, userId),
-                inArray(
-                  tasks.parentId,
-                  parentRows.map((r) => r.id as string),
-                ),
-              ),
-            )
-            .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt))) as AnyRow[]
-        : [];
+      if (parentRows.length === 0) {
+        return { content: [{ type: "text" as const, text: "[]" }] };
+      }
 
-      const all = await withLabels([...parentRows, ...childRows]);
-      return { content: [{ type: "text" as const, text: JSON.stringify(all, null, 2) }] };
+      // Single grouped query for pending subtask counts — no N+1
+      const parentIds = parentRows.map((r) => r.id as string);
+      const countRows = await db
+        .select({ parentId: tasks.parentId, total: count() })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.userId, userId),
+            inArray(tasks.parentId, parentIds),
+            eq(tasks.status, "pending"),
+          ),
+        )
+        .groupBy(tasks.parentId);
+
+      const countMap: Record<string, number> = {};
+      for (const row of countRows) {
+        if (row.parentId) countMap[row.parentId] = Number(row.total);
+      }
+
+      const withCounts = parentRows.map((r) => ({
+        ...r,
+        pendingSubtaskCount: countMap[r.id as string] ?? 0,
+      })) as AnyRow[];
+
+      const labeled = await withLabels(withCounts);
+      return { content: [{ type: "text" as const, text: JSON.stringify(labeled) }] };
     },
   );
 
